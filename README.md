@@ -117,6 +117,9 @@ This project helped deepen understanding of:
 - Conversation state management
 - Agent runtime design
 
+## TODO
+- Iteration 2: Robust Agent Runtime
+
 ## Run the project
 ```
 python main.py

@@ -1,6 +1,6 @@
 from prompts import system_prompt
 from llm import llm
-from tools import calendar_tool, todo_items_tool
+from tools import calendar_tool, todo_items_tool, weather_tool
 import json
 
 def get_calendar_events(date: str):
@@ -22,12 +22,22 @@ def get_todo_items(date: str):
         ]
     }
 
+def get_weather(location: str, date: str):
+    return {
+        "location": location,
+        "date": date,
+        "forecast": "rainy",
+        "temperature": "52°F",
+        "suggestion": "Prefer indoor activities or bring an umbrella."
+    }
+
 TOOL_MAP = {
     "get_calendar_events": get_calendar_events,
-    "get_todo_items": get_todo_items
+    "get_todo_items": get_todo_items,
+    "get_weather": get_weather
 }
 
-ALL_TOOLS = calendar_tool.TOOLS + todo_items_tool.TOOLS
+ALL_TOOLS = calendar_tool.TOOLS + todo_items_tool.TOOLS + weather_tool.TOOLS
 
 def run_agent(user_input: str) -> str:
     messages = []

@@ -1,43 +1,7 @@
 from prompts import system_prompt
 from llm import llm
-from tools import calendar_tool, todo_items_tool, weather_tool
+from tools import tool_registry
 import json
-
-def get_calendar_events(date: str):
-    return {
-        "date": date,
-        "events": [
-            {"start": "12:00", "end": "13:00", "title": "Lunch"},
-            {"start": "15:30", "end": "16:30", "title": "Pick up my daughter from daycare"}
-        ]
-    }
-
-def get_todo_items(date: str):
-    return {
-        "date": date,
-        "events": [
-            {"task": "Study LeetCode for 1 hour", "priority": "high"},
-            {"task": "Work on AI agent project for 2 hours", "priority": "high"},
-            {"task": "Buy groceries", "priority": "medium"}
-        ]
-    }
-
-def get_weather(location: str, date: str):
-    return {
-        "location": location,
-        "date": date,
-        "forecast": "rainy",
-        "temperature": "52°F",
-        "suggestion": "Prefer indoor activities or bring an umbrella."
-    }
-
-TOOL_MAP = {
-    "get_calendar_events": get_calendar_events,
-    "get_todo_items": get_todo_items,
-    "get_weather": get_weather
-}
-
-ALL_TOOLS = calendar_tool.TOOLS + todo_items_tool.TOOLS + weather_tool.TOOLS
 
 def run_agent(user_input: str) -> str:
     messages = []
@@ -50,7 +14,7 @@ def run_agent(user_input: str) -> str:
 
     while True:
         # 让LLM决定是否要调用tool
-        response = llm.call_llm(messages, ALL_TOOLS)
+        response = llm.call_llm(messages, tool_registry.TOOLS)
 
         if not response.tool_calls:
             return response.content
@@ -62,7 +26,7 @@ def run_agent(user_input: str) -> str:
             tool_name = tool_call.function.name
             args = json.loads(tool_call.function.arguments)
 
-            tool_result = TOOL_MAP[tool_name](**args)
+            tool_result = tool_registry.TOOL_MAP[tool_name](**args)
             print(f"tool_result: {tool_result}")
 
             # new role: tool --> backend 执行tool, 把结果返回LLM

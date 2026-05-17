@@ -1,6 +1,13 @@
+def get_weather(location: str, date: str):
+    return {
+        "location": location,
+        "date": date,
+        "forecast": "rainy",
+        "temperature": "52°F",
+        "suggestion": "Prefer indoor activities or bring an umbrella."
+    }
 
-TOOLS = [
-    {
+SCHEMA = {
         "type": "function",
         "function": {
             "name": "get_weather",
@@ -23,4 +30,3 @@ TOOLS = [
             }
         }
     }
-]

@@ -1,6 +1,13 @@
+def get_calendar_events(date: str):
+    return {
+        "date": date,
+        "events": [
+            {"start": "12:00", "end": "13:00", "title": "Lunch"},
+            {"start": "15:30", "end": "16:30", "title": "Pick up my daughter from daycare"}
+        ]
+    }
 
-TOOLS = [
-    {
+SCHEMA = {
         "type": "function",
         "function": {
             "name": "get_calendar_events",
@@ -18,4 +25,4 @@ TOOLS = [
             }
         }
     }
-]
+

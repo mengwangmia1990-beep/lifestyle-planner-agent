@@ -2,6 +2,7 @@ from prompts import system_prompt
 from llm import llm
 from tools import tool_registry
 import json
+import config
 
 def run_agent(user_input: str) -> str:
     messages = []
@@ -12,14 +13,18 @@ def run_agent(user_input: str) -> str:
     messages.append(system_prompt.system_message)
     messages.append(user_message)
 
-    while True:
-        # 让LLM决定是否要调用tool
+    loop_count = 0
+
+    while loop_count < config.MAX_LOOP_COUNT:
+        loop_count += 1
+
         response = llm.call_llm(messages, tool_registry.TOOLS)
 
+        # stop tool calling
         if not response.tool_calls:
             return response.content
 
-        # append assistant message
+        # assistant role message: e.g. LLM decides to call which tool, and let backend know
         messages.append(response)
 
         for tool_call in response.tool_calls:
@@ -35,3 +40,6 @@ def run_agent(user_input: str) -> str:
                 "tool_call_id": tool_call.id,
                 "content": json.dumps(tool_result)
             })
+    
+    # fallback return when reaches max loop
+    return "Sorry, I couldn't complete the request within the allowed number of steps."

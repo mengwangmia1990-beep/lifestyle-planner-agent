@@ -16,6 +16,7 @@ Current tools:
 
 - Calendar tool
 - Todo list tool
+- weather tool
 
 ## Architecture
 ```
@@ -36,9 +37,11 @@ Final Response
 
 ## Key Features
 ### Multi-step Agent Loop
-The agent supports iterative reasoning and tool execution:  
+The agent supports iterative reasoning and tool execution within a fixed max loop count, and a fallback return message when reaching max limit.
 ```python
-while True:
+while loop_count < MAX_LOOP_COUNT:
+    loop_count += 1
+
     response = llm.call_llm(messages, ALL_TOOLS)
 
     if not response.tool_calls:
@@ -54,6 +57,7 @@ while True:
             "tool_call_id": tool_call.id,
             "content": json.dumps(tool_result)
         })
+return "Sorry, I couldn't complete the request within the allowed number of steps."
 ```
 This allows the LLM to:
 
@@ -62,13 +66,15 @@ This allows the LLM to:
 3. Continue reasoning
 4. Optionally call more tools  
 5. Generate a final response  
+6. Avoid endless tool calling
 
 ## Tool Registry
 Backend tools are dynamically dispatched through a tool registry:  
 ```python
 TOOL_MAP = {
     "get_calendar_events": get_calendar_events,
-    "get_todo_items": get_todo_items
+    "get_todo_items": get_todo_items,
+    "get_weather: get_weather
 }
 ```
 
@@ -114,11 +120,17 @@ This project helped deepen understanding of:
 - Agent orchestration loops
 - Multi-step reasoning
 - Tool execution routing
+- Max loop constraint
 - Conversation state management
 - Agent runtime design
 
 ## TODO
-- Iteration 2: Robust Agent Runtime
+- Iteration 2: Deterministic Validation  
+    - LLM generates structured plan
+    - backend parses JSON
+    - backend validates time correctness, overlap with calendar, etc.
+    - if invalid, return validation error
+    - (Iteration 2.1: ask LLM repair if invalid)
 
 ## Run the project
 ```

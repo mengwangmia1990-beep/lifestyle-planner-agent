@@ -11,6 +11,7 @@ The agent can:
 - Execute backend tools
 - Consume tool results
 - Generate final recommendations
+- Backend validate final plan
 
 Current tools:
 
@@ -33,6 +34,8 @@ Tool Result Injection
 LLM Continues Reasoning
     ↓
 Final Response
+    ↓
+Backend Deterministic Validation
 ```
 
 ## Key Features
@@ -111,18 +114,24 @@ Returns todo items results
 
 LLM:
 Generates final lifestyle plan
+
+Backend:
+Validates fiinal lifestyle plan
 ```
 
-## Key Learnings
-This project helped deepen understanding of:
+## Backend Deterministic Validation  
+Current system validates three important metris:
+- each task start and end time interval should be valid  
+- each time interval should not overlap with another
+- total duration time for each task should match user's todo item list
 
-- OpenAI tool calling APIs
-- Agent orchestration loops
-- Multi-step reasoning
-- Tool execution routing
-- Max loop constraint
-- Conversation state management
-- Agent runtime design
+### Validation Result
+![alt text](image.png)
+From above validation result, it is obvious to see that LLM result (especially on the hard constraints) is normally not reliable. 
+> **LLM is NOT source of truth**
+
+With the validation process, we can avoid providing user with an invalid plan. However, this is a bad user experience. This brings us the next iteration plan: 
+> We need to send the validation result back to LLM for revision, and validate again before handling to user.
 
 ## TODO
 - Iteration 2: Deterministic Validation  

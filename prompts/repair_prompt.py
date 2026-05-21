@@ -12,21 +12,29 @@ def get_repair_prompt(
         "content": f"""
             Your plan does not pass the validation.
             
-            Please repair the plan according to the validation errors.
+            You are NOT allowed to preserve the current plan.
+            Discard all existing task blocks.
+            Create a brand-new tasks list using only expected todo items.
 
-
-
-            Rules:
-            - You MUST return the repaired plan only in valid JSON format.
+            Output Rules:
+            - Return ONLY valid JSON.
+            - Return exactly one top-level key: "tasks".
+            - Do NOT include "calendar_events" or any other top-level keys.
             - Do NOT include markdown formatting.
             - Do NOT wrap the output with ```json.
             - Do NOT include explanations.
-            - Calendar events are FIXED and CANNOT be moved.
-            - The repaired plan MUST NOT overlap with the calendar events.
-            - The repaired plan MUST include ALL expected todo items.
-            - Only move planned todo tasks. Do not modify calendar events.
-            - If validation error says missing calendar event, fix it by adding the missing calendar event back exactly.
-            - Do NOT remove other calendar events.
+
+            Planning rules:
+            - Calendar events are fixed busy blocks and cannot be moved.
+            - Each todo_id should appear at most once unless splitting is necessary.
+            - Planned todo tasks MUST NOT overlap with each other.
+            - Planned todo tasks MUST NOT overlap with calendar events.
+            - Only schedule todo items from the expected todo items list.
+            - Include ALL expected todo items.
+            - For each todo_id, the total scheduled duration across all task blocks MUST equal its expected duration_minutes exactly.
+            - Do NOT over-schedule or under-schedule any todo_id.
+            - You may split a todo item into multiple blocks only if the total duration still equals expected duration_minutes.
+            - Return tasks sorted by start time.
         
             Current plan:
             {plan}
@@ -38,6 +46,14 @@ def get_repair_prompt(
             {calendar_events}
             
             Expectated todo items
-            {todo_items}
+            {todo_items},
+
+            expected_duration_by_todo
+            {{
+                "todo_1": 120,
+                "todo_2": 120,
+                "todo_3": 30
+            }}
+            For each todo_id, total scheduled minutes must equal this map exactly.
         """
     }]

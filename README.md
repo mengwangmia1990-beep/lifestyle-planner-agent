@@ -116,15 +116,15 @@ LLM:
 Generates final lifestyle plan
 
 Backend:
-Validates fiinal lifestyle plan
+Validates fiinal plan via repair loop
 ```
 
 ## Backend Deterministic Validation  
 Current system validates four important metris:
 - each task start and end time interval should be valid  
-- all calender events are required in the plan  
 - each time interval should not overlap with another
 - total duration time for each task should match user's todo item list
+- planned todo tasks must not conflict with fixed calendar events
 
 ### Validation Result
 ![alt text](image.png)
@@ -133,7 +133,6 @@ From above validation result, it is obvious to see that LLM result (especially o
 
 With the validation process, we can avoid providing user with an invalid plan. However, this is a bad user experience. This brings us the next iteration plan: 
 > We need to send the validation result back to LLM for revision, and validate again until a valid plan is generated.
-
 ---
 
 ### Repair Loop
@@ -144,11 +143,118 @@ With the validation process, we can avoid providing user with an invalid plan. H
 3. Repeat until:
    - the plan passes validation
    - or maximum repair attempts are reached
-   
----
 
-### Common technical issues
-#### 1. LLM Does Not Always Return Valid Raw JSON
+#### Limitation
+
+Although repair loops improve reliability, **they do not always converge.**
+
+Common failure patterns include:  
+1. fixing one validation error introduces another  
+2. local edits breaks global schedule consistency
+3. repeated over-scheduling tasks
+4. unstable duration calculations
+
+Below repair log indicates that system reaches the max retry limit, but still not able to converge a valid plan.
+```json
+[{
+    'loop': 1, 
+    'invalid_plan': {
+        'tasks': [
+            {'todo_id': 'todo_1', 'title': 'Study LeetCode', 'start': '09:00', 'end': '11:00'}, 
+            {'todo_id': 'todo_2', 'title': 'Work on AI agent project', 'start': '11:00', 'end': '12:00'}, 
+            {'todo_id': 'todo_3', 'title': 'Buy groceries', 'start': '13:00', 'end': '13:30'}, 
+            {'todo_id': 'todo_2', 'title': 'Work on AI agent project', 'start': '13:30', 'end': '15:30'}, 
+            {'todo_id': 'todo_2', 'title': 'Work on AI agent project', 'start': '16:30', 'end': '18:30'}]}, 
+    'errors': ['task todo_2 duration 300.0 does not match with expected duration 120'], 
+    'repaired_plan': {
+        'tasks': [
+            {'todo_id': 'todo_1', 'title': 'Study LeetCode', 'start': '09:00', 'end': '11:00'}, 
+            {'todo_id': 'todo_2', 'title': 'Work on AI agent project', 'start': '11:00', 'end': '12:00'}, 
+            {'todo_id': 'todo_3', 'title': 'Buy groceries', 'start': '13:00', 'end': '13:30'}, 
+            {'todo_id': 'todo_2', 'title': 'Work on AI agent project', 'start': '13:30', 'end': '15:30'}]}}, 
+{
+    'loop': 2, 
+    'invalid_plan': {
+        'tasks': [
+            {'todo_id': 'todo_1', 'title': 'Study LeetCode', 'start': '09:00', 'end': '11:00'}, 
+            {'todo_id': 'todo_2', 'title': 'Work on AI agent project', 'start': '11:00', 'end': '12:00'}, 
+            {'todo_id': 'todo_3', 'title': 'Buy groceries', 'start': '13:00', 'end': '13:30'}, 
+            {'todo_id': 'todo_2', 'title': 'Work on AI agent project', 'start': '13:30', 'end': '15:30'}]}, 
+    'errors': ['task todo_2 duration 180.0 does not match with expected duration 120'], 
+    'repaired_plan': {
+        'tasks': [
+            {'todo_id': 'todo_1', 'title': 'Study LeetCode', 'start': '09:00', 'end': '11:00'}, 
+            {'todo_id': 'todo_2', 'title': 'Work on AI agent project', 'start': '11:00', 'end': '12:00'}, 
+            {'todo_id': 'todo_3', 'title': 'Buy groceries', 'start': '13:00', 'end': '13:30'}, 
+            {'todo_id': 'todo_2', 'title': 'Work on AI agent project', 'start': '13:30', 'end': '15:30'}]}}, 
+{
+    'loop': 3, 
+    'invalid_plan': {
+        'tasks': [
+            {'todo_id': 'todo_1', 'title': 'Study LeetCode', 'start': '09:00', 'end': '11:00'}, 
+            {'todo_id': 'todo_2', 'title': 'Work on AI agent project', 'start': '11:00', 'end': '12:00'}, 
+            {'todo_id': 'todo_3', 'title': 'Buy groceries', 'start': '13:00', 'end': '13:30'}, 
+            {'todo_id': 'todo_2', 'title': 'Work on AI agent project', 'start': '13:30', 'end': '15:30'}]}, 
+    'errors': ['task todo_2 duration 180.0 does not match with expected duration 120'], 
+    'repaired_plan': {
+        'tasks': [
+            {'todo_id': 'todo_1', 'title': 'Study LeetCode', 'start': '09:00', 'end': '11:00'}, 
+            {'todo_id': 'todo_2', 'title': 'Work on AI agent project', 'start': '11:00', 'end': '12:00'}, 
+            {'todo_id': 'todo_3', 'title': 'Buy groceries', 'start': '13:00', 'end': '13:30'}, 
+            {'todo_id': 'todo_2', 'title': 'Work on AI agent project', 'start': '13:30', 'end': '15:30'}]}}]
+AI: I cannot generate a valid plan. Please try again.
+```
+
+This demonstrates a common limitation of LLM-compute-heavy agent systems:
+> **Local repair does not guarantee global correctness**  
+
+Thus brings us to think about the possible architecture evolution: LLM-compute-heavy vs hybrid system.
+
+
+## Architecture Evolution: LLM-heavy Planning vs Hybrid Systems (Iteration 2)
+
+Initially, the system allowed the LLM to generate fully concrete schedules including:
+- start times
+- end times
+- duration allocation
+- conflict avoidance
+
+However, during repair-loop iterations, several important reliability issues emerged:
+
+- non-converging repair loops
+- local fixes breaking global constraints
+- inaccurate duration calculations
+- overlap reintroduction
+- unstable time arithmetic
+
+This revealed an important engineering insight:
+
+> LLMs are strong at semantic reasoning,
+> but weak at deterministic constraint satisfaction.
+
+As a result, the next iteration of the project will gradually migrate deterministic scheduling logic into the backend.
+
+Planned hybrid architecture:
+
+LLM responsibilities:
+- understand user intent
+- prioritize tasks
+- reason about user preferences
+- generate high-level planning intent
+
+Backend responsibilities:
+- deterministic duration calculation
+- interval allocation
+- overlap prevention
+- calendar conflict resolution
+- final schedule generation
+
+This transition reflects a common industrial pattern in modern AI agent systems:
+> LLM + deterministic backend systems
+
+
+## Common technical issues
+### 1. LLM Does Not Always Return Valid Raw JSON
 Even with explicit prompt constraints, the LLM may still wrap the JSON output inside markdown code blocks such as:
 
 ```text
@@ -171,7 +277,7 @@ Future improvement:
 
 ---
 
-#### 2. Valid Plan Does Not Always Mean Human-Readable Plan
+### 2. Valid Plan Does Not Always Mean Human-Readable Plan
 Even if the generated plan passes validation, the output may still be difficult to read or poorly organized.
 
 For example:
@@ -187,13 +293,12 @@ Future improvement:
   - standardize task schema
   - improve readability of final output
 
-## Current Limitations and TODOs
-- normalization layer is still under development
-- repair latency can be high due to multiple LLM calls (consider call tools in parallel)
-- tool results are currently mocked
 
 
 ## Run the project
 ```
 python main.py
+
+example user query:
+help me plan tomorrow's schedule
 ```

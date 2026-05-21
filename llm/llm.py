@@ -13,9 +13,9 @@ def call_llm(messages, tools) -> str:
     return response.choices[0].message
 
 
-def call_llm_final(messages) -> str:
-    final_response = client.chat.completions.create(
+def call_llm_no_tool(messages) -> str:
+    response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=messages
     )
-    return final_response.choices[0].message.content
+    return response.choices[0].message.content

@@ -19,6 +19,10 @@ system_message = {
 
         If the user asks to plan a schedule, you should first call get_calendar_events.
 
+        Fixed calendar events are mandatory tasks in the final plan.
+        You MUST copy every calendar event into tasks exactly as provided.
+        Do not omit, rename, reschedule, or modify calendar events.
+
         You MUST return the result ONLY in valid JSON format.
         You MUST attach the todo_id for todo items in your plan.
         You MUST cover all todo items if you can make the plan.

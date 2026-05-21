@@ -1,10 +1,11 @@
-from prompts import system_prompt
+from prompts import system_prompt, repair_prompt
 from llm import llm
 from tools import tool_registry
 import json
 import config
 from datetime import datetime
 from models.validation_models import ValidationResult
+
 
 def parse_time(time_str: str):
     time = datetime.strptime(time_str, "%H:%M")
@@ -108,6 +109,29 @@ def validate_duration(tasks, tool_results):
         errors=[]
     )
 
+def validate_calendar_events_included(tasks, tool_results):
+    expected_events = tool_results["get_calendar_events"]["events"]
+
+    for event in expected_events:
+        found = any(
+            task.get("title") == event.get("title")
+            and task.get("start") == event.get("start")
+            and task.get("end") == event.get("end")
+            for task in tasks
+        )
+
+        if not found:
+            return ValidationResult(
+                valid=False,
+                errors=[
+                    f"missing calendar event: {event.get('title')} "
+                    f"{event.get('start')}-{event.get('end')}"
+                ]
+            )
+
+    return ValidationResult(valid=True, errors=[])
+
+
 def validate(plan, tool_results):
     if not plan or "tasks" not in plan or not plan["tasks"]:
         return ValidationResult(
@@ -120,6 +144,10 @@ def validate(plan, tool_results):
         interval_result = validate_interval(task)
         if not interval_result.valid:
             return interval_result
+        
+    calendar_result = validate_calendar_events_included(tasks, tool_results)
+    if not calendar_result.valid:
+        return calendar_result
     
     overlap_result = validate_overlap(tasks)
     if not overlap_result.valid:
@@ -135,7 +163,7 @@ def validate(plan, tool_results):
     )
 
 
-def run_agent(user_input: str) -> str:
+def get_candidate_plan(user_input):
     messages = []
     user_message = {
         "role": "user",
@@ -154,16 +182,7 @@ def run_agent(user_input: str) -> str:
 
         # stop tool calling
         if not response.tool_calls:
-            try:
-                plan = json.loads(response.content)
-            except json.JSONDecodeError:
-                return ""
-            
-            validation_result = validate(plan, tool_results)
-            if validation_result.valid:
-                return response.content
-            else:
-                return validation_result
+            return response.content, tool_results
 
         # assistant role message: e.g. LLM decides to call which tool, and let backend know
         messages.append(response)
@@ -180,7 +199,6 @@ def run_agent(user_input: str) -> str:
             # save tool_result for backend validation
             tool_results[tool_name] = tool_result
 
-            # new role: tool --> backend 执行tool, 把结果返回LLM
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call.id,
@@ -189,3 +207,56 @@ def run_agent(user_input: str) -> str:
     
     # fallback return when reaches max loop
     return "Sorry, I couldn't complete the request within the allowed number of steps."
+
+
+def repair_plan(plan, tool_results):
+    repair_loop = 0
+    while repair_loop < config.MAX_REPAIR_LOOP_COUNT:
+        repair_loop += 1
+
+        validation_result = validate(plan, tool_results)
+        if validation_result.valid:
+            return plan
+        else:
+            # send to LLM to repair
+            # 1. generate LLM repair prompt
+            # 2. call llm
+            # 3. collect result
+            repair_message = repair_prompt.get_repair_prompt(
+                                            plan, 
+                                            validation_result, 
+                                            tool_results["get_todo_items"]["todos"],
+                                            tool_results["get_calendar_events"]["events"])
+            
+            repaired_response = llm.call_llm_no_tool(repair_message)
+
+            try:
+                repaired_plan = json.loads(repaired_response)
+            except json.JSONDecodeError:
+                print("Failed to generate valid JSON from repaired response. Repair Failed.")
+                return "" # 先这么处理
+
+            plan = repaired_plan
+            
+    return None # over max limit, still cannot generate correct plan. return None
+
+
+def normalize(plan):
+    # TODO: add normalization logic
+    return plan
+
+
+def run_agent(user_input: str) -> str:
+    response_content, tool_results = get_candidate_plan(user_input)
+
+    try:
+        plan = json.loads(response_content)
+    except json.JSONDecodeError:
+        return ""
+    
+    repaired_result = repair_plan(plan, tool_results)
+    if not repaired_result:
+        return "I cannot generate a valid plan. Please try again." # TODO: need to figure out the proper address here
+
+    return normalize(repaired_result)
+

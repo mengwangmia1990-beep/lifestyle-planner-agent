@@ -120,8 +120,9 @@ Validates fiinal lifestyle plan
 ```
 
 ## Backend Deterministic Validation  
-Current system validates three important metris:
+Current system validates four important metris:
 - each task start and end time interval should be valid  
+- all calender events are required in the plan  
 - each time interval should not overlap with another
 - total duration time for each task should match user's todo item list
 
@@ -131,15 +132,66 @@ From above validation result, it is obvious to see that LLM result (especially o
 > **LLM is NOT source of truth**
 
 With the validation process, we can avoid providing user with an invalid plan. However, this is a bad user experience. This brings us the next iteration plan: 
-> We need to send the validation result back to LLM for revision, and validate again before handling to user.
+> We need to send the validation result back to LLM for revision, and validate again until a valid plan is generated.
 
-## TODO
-- Iteration 2: Deterministic Validation  
-    - LLM generates structured plan
-    - backend parses JSON
-    - backend validates time correctness, overlap with calendar, etc.
-    - if invalid, return validation error
-    - (Iteration 2.1: ask LLM repair if invalid)
+---
+
+### Repair Loop
+1. If validation fails:
+   - send validation errors back to the LLM
+   - ask the LLM to repair the plan
+2. Re-validate the repaired plan
+3. Repeat until:
+   - the plan passes validation
+   - or maximum repair attempts are reached
+   
+---
+
+### Common technical issues
+#### 1. LLM Does Not Always Return Valid Raw JSON
+Even with explicit prompt constraints, the LLM may still wrap the JSON output inside markdown code blocks such as:
+
+```text
+```json
+{
+    ...
+}
+```
+
+This causes `json.loads()` to fail.  
+
+To improve robustness, we strengthened the prompt instructions to explicitly require:
+
+- raw JSON only
+- no markdown formatting
+- no extra explanations
+
+Future improvement:
+- add a backend JSON extraction layer before parsing.
+
+---
+
+#### 2. Valid Plan Does Not Always Mean Human-Readable Plan
+Even if the generated plan passes validation, the output may still be difficult to read or poorly organized.
+
+For example:
+- tasks may not be sorted chronologically
+- task ordering may look unnatural to humans
+- formatting may be inconsistent
+
+These issues are considered **presentation problems** rather than validation failures.
+
+Future improvement:
+- introduce a normalization layer to:
+  - sort tasks by start time
+  - standardize task schema
+  - improve readability of final output
+
+## Current Limitations and TODOs
+- normalization layer is still under development
+- repair latency can be high due to multiple LLM calls (consider call tools in parallel)
+- tool results are currently mocked
+
 
 ## Run the project
 ```

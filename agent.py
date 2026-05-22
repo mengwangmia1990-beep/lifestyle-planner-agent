@@ -298,15 +298,88 @@ def normalize(plan):
     return plan
 
 
+def get_busy_intervals(events: list[dict]) -> list[dict]:
+    intervals = []
+    events.sort(key=lambda x:x["start"])
+
+    for event in events:
+        intervals.append({
+            "start": parse_time(event["start"]),
+            "end": parse_time(event["end"])
+        })
+    return intervals
+
+
+def get_free_intervals(busy_intervals: list[dict]) -> list[dict]:
+    # let's hardcode full day for now
+    day_start = parse_time("09:00")
+    day_end = parse_time("19:00")
+
+    free_intervals = []
+    cur_start = day_start
+
+    for busy_interval in busy_intervals:
+        busy_start = busy_interval["start"]
+        busy_end = busy_interval["end"]
+
+        if busy_start > cur_start:
+            free_intervals.append({
+                "start": cur_start,
+                "end": busy_start
+            })
+
+        cur_start = max(cur_start, busy_end)
+    
+    if cur_start < day_end:
+        free_intervals.append({
+            "start": cur_start,
+            "end": day_end
+        })
+
+    return free_intervals
+
+
+def get_priority(intent: dict) -> int:
+    if intent["user_priority"] is not None:
+            return intent["user_priority"]
+    if intent["inferred_priority"] is not None:
+        return intent["inferred_priority"]
+    return 999 # rest of the intents
+    
+
+def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
+    calendar_events = tool_results["get_calendar_events"]["events"]
+    todos = tool_results["get_todo_items"]["todos"]
+
+    # 1. build todo_id -> todo
+
+    # 2. convert calendar events to busy intervals
+    busy_intervals = get_busy_intervals(calendar_events)
+
+    # 3. generate free intervals (from 9:00 AM to 6:00 PM)
+    free_intervals = get_free_intervals(busy_intervals)
+
+    # 4. sort todos by explicit_user_priority / inferred_priority / original order
+    intents = planning_intents["planning_intents"]
+    intents.sort(key=get_priority)
+
+
+    
+    # 5. place each todo into earliest valid free slot based on preferred_time_window
+    # 6. return scheduled tasks + unscheduled tasks
+
+    return {}
+
+
 def run_agent(user_input: str) -> str:
     response_content, tool_results = get_candidate_plan(user_input)
 
     try:
-        planning_intent = json.loads(response_content)
+        planning_intents = json.loads(response_content)
     except json.JSONDecodeError:
         return ""
     
-    # TODO: Backend needs to create the concret plan based on LLM's planning intent
+    concrete_plan = generate_concrete_plan(planning_intents, tool_results)
 
     # repaired_plan, logs = repair_plan(plan, tool_results)
     # if not repaired_plan:

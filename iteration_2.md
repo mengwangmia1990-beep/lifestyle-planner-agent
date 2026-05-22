@@ -7,21 +7,23 @@ LLM output contract:
 ```json
 {
   "planning_intents": [
-    {
-      "todo_id": "todo_1",
-      "priority": 1,
-      "preferred_time_window": "morning",
-      "preferred_start": "09:00",
-      "deep_work": true,
-      "avoid_splitting": true,
-      "reason": "This task requires focus and is better scheduled earlier."
-    }
-  ]
+        {
+            "todo_id": "string",
+            "user_priority": "1-5 or null",
+            "inferred_priority": "1-5 or null",
+            "preferred_time_window": "morning | afternoon | evening | flexible",
+            "preferred_start": "HH:MM or null",
+            "deep_work": true,
+            "avoid_splitting": true,
+            "reason": "string"
+        }
+    ]
 }
 ```
 
-> todo_id: 必须来自 todo_items 
-> priority: LLM 根据用户意愿和任务性质排序，1最高  
+> todo_id: 必须来自 todo_items  
+> user_priority: explicitly mentioned by user. e.g. I want to do this first today   
+> inferred_priority: LLM 根据用户意愿和任务性质排序，1最高  
 > preferred_time_window: morning / afternoon / evening / flexible  
 > preferred_start: 可选，只是 hint，不是 hard constraint  
 > deep_work: 是否需要连续专注时间  

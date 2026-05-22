@@ -293,12 +293,6 @@ def repair_plan(plan, tool_results):
     return None, repair_logs
 
 
-# TODO:
-# LLM：只安排 todo
-# Backend：合并 calendar events
-# Validator：检查 combined final plan
-
-
 def normalize(plan):
     # TODO: add normalization logic
     return plan
@@ -308,13 +302,16 @@ def run_agent(user_input: str) -> str:
     response_content, tool_results = get_candidate_plan(user_input)
 
     try:
-        plan = json.loads(response_content)
+        planning_intent = json.loads(response_content)
     except json.JSONDecodeError:
         return ""
     
-    repaired_plan, logs = repair_plan(plan, tool_results)
-    if not repaired_plan:
-        print(logs)
-        return "I cannot generate a valid plan. Please try again." # TODO: need to figure out the proper address here
+    # TODO: Backend needs to create the concret plan based on LLM's planning intent
 
-    return normalize(repaired_plan)
+    # repaired_plan, logs = repair_plan(plan, tool_results)
+    # if not repaired_plan:
+    #     print(logs)
+    #     return "I cannot generate a valid plan. Please try again." # TODO: need to figure out the proper address here
+
+    # return normalize(repaired_plan)
+    return ""

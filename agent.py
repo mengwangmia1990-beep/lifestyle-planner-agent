@@ -3,13 +3,17 @@ from llm import llm
 from tools import tool_registry
 import json
 import config
-from datetime import datetime
+from datetime import datetime, timedelta
 from models.validation_models import ValidationResult
 
 
 def parse_time(time_str: str):
     time = datetime.strptime(time_str, "%H:%M")
     return time
+
+
+def add_minutes(start_time: datetime, duration: int) -> datetime:
+     return start_time + timedelta(minutes=duration)
 
 
 def validate_interval(task: dict) -> ValidationResult:
@@ -345,30 +349,115 @@ def get_priority(intent: dict) -> int:
     if intent["inferred_priority"] is not None:
         return intent["inferred_priority"]
     return 999 # rest of the intents
+
+
+def get_window_range(preferred_time_window):
+    if preferred_time_window == "morning":
+        return (parse_time("09:00"), parse_time("12:00"))
+    if preferred_time_window == "afternoon":
+        return (parse_time("12:00"), parse_time("17:00"))
+    if preferred_time_window == "evening":
+        return (parse_time("17:00"), parse_time("21:00"))
+    return (parse_time("09:00"), parse_time("21:00"))  # flexible
+
+
+def subtract_interval(free_intervals, occupied_start, occupied_end):
+    updated = []
+
+    for interval in free_intervals:
+        start = interval["start"]
+        end = interval["end"]
+
+        # no overlap
+        if occupied_end <= start or occupied_start >= end:
+            updated.append(interval)
+            continue
+
+        # left remaining part
+        if occupied_start > start:
+            updated.append({
+                "start": start,
+                "end": occupied_start
+            })
+
+        # right remaining part
+        if occupied_end < end:
+            updated.append({
+                "start": occupied_end,
+                "end": end
+            })
+
+    return updated
     
 
 def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
     calendar_events = tool_results["get_calendar_events"]["events"]
     todos = tool_results["get_todo_items"]["todos"]
 
-    # 1. build todo_id -> todo
-
-    # 2. convert calendar events to busy intervals
+    # 1. convert calendar events to busy intervals
     busy_intervals = get_busy_intervals(calendar_events)
 
-    # 3. generate free intervals (from 9:00 AM to 6:00 PM)
+    # 2. generate free intervals (from 9:00 AM to 6:00 PM)
     free_intervals = get_free_intervals(busy_intervals)
 
-    # 4. sort todos by explicit_user_priority / inferred_priority / original order
+    # 3. sort todos by explicit_user_priority / inferred_priority / original order
     intents = planning_intents["planning_intents"]
     intents.sort(key=get_priority)
-
-
     
-    # 5. place each todo into earliest valid free slot based on preferred_time_window
-    # 6. return scheduled tasks + unscheduled tasks
+    # 4. place each todo into earliest valid free slot based on preferred_time_window
+    todo_map = {}
+    for todo in todos:
+        todo_map[todo["todo_id"]] = todo["duration_minutes"]
 
-    return {}
+    plans = []
+    unscheduled = []
+
+    for intent in intents:
+        placed = False
+        
+        todo_id = intent["todo_id"]
+        duration = todo_map.get(todo_id)
+
+        if duration is None:
+            continue
+
+        # for this duration, find the earliest valid free slot based on preferred_time_window
+        preferred_time_window = intent["preferred_time_window"]
+        window_start, window_end = get_window_range(preferred_time_window)
+
+        for free_interval in free_intervals:
+            candidate_start = max(free_interval["start"], window_start)
+            candidate_end_limit = min(free_interval["end"], window_end)
+
+            candidate_end = add_minutes(candidate_start, duration)
+            
+            if candidate_end <= candidate_end_limit:
+                # no need to split the task. Task is completely fit in this candidate window
+                plan = {
+                    "todo_id": todo_id,
+                    "start": candidate_start.strftime("%H:%M"),
+                    "end": candidate_end.strftime("%H:%M"),
+                }
+                plans.append(plan)
+
+                free_intervals = subtract_interval(
+                    free_intervals,
+                    candidate_start,
+                    candidate_end
+                )
+
+                placed = True
+                break
+        
+        if not placed:
+            unscheduled.append({
+                "todo_id": todo_id,
+                "reason": "No valid free slot found"
+            })
+
+
+    # 5. return scheduled tasks and unscheduled tasks
+    return plans, unscheduled
 
 
 def run_agent(user_input: str) -> str:
@@ -379,12 +468,16 @@ def run_agent(user_input: str) -> str:
     except json.JSONDecodeError:
         return ""
     
-    concrete_plan = generate_concrete_plan(planning_intents, tool_results)
+    scheduled, unscheduled = generate_concrete_plan(planning_intents, tool_results)
 
     # repaired_plan, logs = repair_plan(plan, tool_results)
     # if not repaired_plan:
     #     print(logs)
-    #     return "I cannot generate a valid plan. Please try again." # TODO: need to figure out the proper address here
+    #     return "I cannot generate a valid plan. Please try again."
 
     # return normalize(repaired_plan)
-    return ""
+
+    return json.dumps({
+        "scheduled": scheduled,
+        "unscheduled": unscheduled
+    }, indent=2)

@@ -150,14 +150,16 @@ def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
         placed = False
         
         todo_id = intent["todo_id"]
-        duration = todo_map.get(todo_id)
+        default_duration = todo_map.get(todo_id)
 
-        if duration is None:
+        if default_duration is None:
             continue
 
         preferred_time_window = intent["preferred_time_window"]
         
         not_before = parse_not_before(intent.get("not_before"))
+
+        override_duration = intent.get("override_duration_minutes")
         
         for window_start, window_end in get_candidate_windows(preferred_time_window):
             for free_interval in free_intervals:
@@ -168,6 +170,7 @@ def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
                 
                 candidate_end_limit = min(free_interval["end"], window_end)
 
+                duration = override_duration if override_duration is not None else default_duration
                 candidate_end = add_minutes(candidate_start, duration)
                 
                 # task can fit in:

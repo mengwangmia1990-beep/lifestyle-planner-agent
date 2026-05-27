@@ -80,7 +80,7 @@ def validate_overlap(tasks):
         )
 
 
-def validate_duration(tasks, tool_results):
+def validate_duration(tasks, planning_intents, tool_results):
     # aggregate by todo_id, construct a dict for actual tasks
     actual_todo_duration = {}
     for task in tasks:
@@ -105,9 +105,15 @@ def validate_duration(tasks, tool_results):
         id = todo["todo_id"]
         expected_todo_duration[id] = todo["duration_minutes"]
 
+    for intent in planning_intents["planning_intents"]:
+        override_duration_minutes = intent.get("override_duration_minutes")
+        if override_duration_minutes is not None:
+            expected_todo_duration[intent["todo_id"]] = int(override_duration_minutes)
+
     errors = []
     for todo_id, duration in actual_todo_duration.items():
         expected_duration = expected_todo_duration.get(todo_id, 0)
+
         if duration != expected_duration:
             duration_error = f"task {todo_id} duration {duration} does not match with expected duration {expected_duration}"
             errors.append(duration_error)
@@ -193,7 +199,7 @@ def validate_coverage(scheduled, unscheduled, skipped, tool_results):
     )
 
 
-def validate(scheduled, unscheduled, skipped, tool_results):
+def validate(scheduled, unscheduled, skipped, tool_results, planning_intents):
     errors = []
 
     for task in scheduled:
@@ -209,7 +215,7 @@ def validate(scheduled, unscheduled, skipped, tool_results):
     if not calendar_conflict_result.valid:
         errors.extend(calendar_conflict_result.errors)
     
-    duration_result = validate_duration(scheduled, tool_results)
+    duration_result = validate_duration(scheduled, planning_intents, tool_results)
     if not duration_result.valid:
         errors.extend(duration_result.errors)
 

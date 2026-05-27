@@ -60,6 +60,8 @@ The JSON schema is:
             "preferred_start": "HH:MM or null",
 
             "not_before": "HH:MM or null",
+
+            "override_duration_minutes": "integer or null",
             
             "deep_work": true,
             "avoid_splitting": true,
@@ -84,6 +86,8 @@ Rules:
 - Only set not_before when the user explicitly says a task should happen after a specific time or after a calendar event.
 - If the user says a task should happen after a calendar event, use the calendar event's end time as not_before.
 - If unsure about not_before, use null.
+
+- override_duration_minutes represents the final desired task duration after applying explicit user duration instructions.
 
 - Use deep_work=true for tasks requiring focus, learning, coding, writing, debugging, or complex reasoning.
 - Use avoid_splitting=true for deep work tasks.
@@ -121,5 +125,27 @@ User: "tomorrow morning I need to go grocery shopping. please me plan tomrorow"
 Output:
 grocery shopping user_priority = 1
 others user_priority = null
+
+
+Duration override rules:
+- Set override_duration_minutes only when the user explicitly provides a duration.
+- If the user says they want to spend X minutes/hours on a task, convert it to total minutes and set override_duration_minutes to that value.
+- If the user says "additional X minutes/hours" or "extra X minutes/hours", add that amount to the task's default duration from get_todo_items and return the final total duration.
+- If the user says "less X minutes/hours", "reduce by X minutes/hours", or "shorten by X minutes/hours", subtract that amount from the task's default duration from get_todo_items and return the final total duration.
+- override_duration_minutes must be a positive integer.
+- If the duration request is vague, use null.
+
+Examples:
+Default LeetCode duration = 120 minutes.
+
+User: "I want to work on LeetCode 30 minutes less today."
+Output:
+override_duration_minutes = 90
+
+
+User: "I need to work on LeetCode for additional 1 hour."
+Output:
+override_duration_minutes = 180
+
 """
 }

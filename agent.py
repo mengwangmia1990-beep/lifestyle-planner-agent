@@ -70,7 +70,7 @@ def run_agent(user_input: str) -> str:
     
     scheduled, unscheduled, skipped = scheduler.generate_concrete_plan(planning_intents, tool_results)
 
-    validation_result = validators.validate(scheduled, unscheduled, skipped, tool_results)
+    validation_result = validators.validate(scheduled, unscheduled, skipped, tool_results, planning_intents)
     print(validation_result)
 
     return json.dumps({

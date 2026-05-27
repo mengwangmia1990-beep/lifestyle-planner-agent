@@ -61,7 +61,6 @@ def validate_overlap(tasks):
 
             intervals.append({
                 "todo_id": todo_id,
-                "title": task.get("title", ""),
                 "start": start_time,
                 "end": end_time,
             })
@@ -120,20 +119,18 @@ def validate_duration(tasks, tool_results):
         id = todo["todo_id"]
         expected_todo_duration[id] = todo["duration_minutes"]
 
-    # compares two important metrics:
-    # 1. all todo items are included in the task plan
-    # 2. each todo duration in the task plan meets user's request
     errors = []
-    for todo_id, expected_duration in expected_todo_duration.items():
-        actual_duration = actual_todo_duration.get(todo_id, 0)
-        if actual_duration != expected_duration:
-            duration_error = f"task {todo_id} duration {actual_duration} does not match with expected duration {expected_duration}"
+    for todo_id, duration in actual_todo_duration.items():
+        expected_duration = expected_todo_duration.get(todo_id, 0)
+        if duration != expected_duration:
+            duration_error = f"task {todo_id} duration {duration} does not match with expected duration {expected_duration}"
             errors.append(duration_error)
 
     return ValidationResult(
         valid=len(errors) == 0,
         errors=errors
     )
+
 
 def validate_calendar_conflict(tasks, tool_results):
     errors = []
@@ -144,7 +141,6 @@ def validate_calendar_conflict(tasks, tool_results):
             task_start = parse_time(task["start"])
             task_end = parse_time(task["end"])
             task_id = task.get("todo_id", "unknown")
-            task_title = task.get("title", "")
 
             for event in events:
                 event_start = parse_time(event["start"])
@@ -154,7 +150,7 @@ def validate_calendar_conflict(tasks, tool_results):
                 if task_start < event_end and task_end > event_start:
                     # task has conflict with calendar event
                     errors.append(
-                        f"task {task_id} ({task_title}) "
+                        f"task {task_id} "
                         f"{task['start']}-{task['end']} conflicts with calendar event "
                         f"{event_title} {event['start']}-{event['end']}"
                     )
@@ -169,32 +165,38 @@ def validate_calendar_conflict(tasks, tool_results):
         )
 
 
-def validate(plan, tool_results):
+def validate_coverage(scheduled, unscheduled, tool_results):
+    # this method will validate if scheduled and unscheduled plan cover all user's todo items.
+    # one task cannot be present in both scheduled and unscheduled list.
+    # validate if LLM will output unknown todo ids
+
+    expected_todo_ids = {
+        todo["todo_id"]
+        for todo in tool_results["get_todo_items"]["todos"]
+    }
+
+    scheduled_todo_ids = {
+        task["todo_id"]
+        for task in scheduled
+    }
+
+    unscheduled_todo_ids = {
+        task["todo_id"]
+        for task in unscheduled
+    }
+
     errors = []
-    
-    if not plan or "tasks" not in plan or not plan["tasks"]:
-        return ValidationResult(
-            valid=False,
-            errors=["plan invalid"]
-        )
 
-    tasks = plan["tasks"]
-    for task in tasks:
-        interval_result = validate_interval(task)
-        if not interval_result.valid:
-            errors.extend(interval_result.errors)
-    
-    overlap_result = validate_overlap(tasks)
-    if not overlap_result.valid:
-        errors.extend(overlap_result.errors)
+    missing = expected_todo_ids - scheduled_todo_ids - unscheduled_todo_ids
+    duplicated = scheduled_todo_ids & unscheduled_todo_ids
+    unknown = (scheduled_todo_ids | unscheduled_todo_ids) - expected_todo_ids
 
-    calendar_conflict_result = validate_calendar_conflict(tasks, tool_results)
-    if not calendar_conflict_result.valid:
-        errors.extend(calendar_conflict_result.errors)
-    
-    duration_result = validate_duration(tasks, tool_results)
-    if not duration_result.valid:
-        errors.extend(duration_result.errors)
+    if missing:
+        errors.append(f"missing todo ids: {missing}")
+    if duplicated:
+        errors.append(f"duplicate todo ids: {duplicated}. Tasks cannot be scheduled and unscheduled at the same time.")
+    if unknown:
+        errors.append(f"unknown todo ids: {unknown}")
 
     return ValidationResult(
         valid=len(errors) == 0,
@@ -202,7 +204,37 @@ def validate(plan, tool_results):
     )
 
 
-def get_candidate_plan(user_input):
+def validate(scheduled, unscheduled, tool_results):
+    errors = []
+
+    for task in scheduled:
+        interval_result = validate_interval(task)
+        if not interval_result.valid:
+            errors.extend(interval_result.errors)
+    
+    overlap_result = validate_overlap(scheduled)
+    if not overlap_result.valid:
+        errors.extend(overlap_result.errors)
+
+    calendar_conflict_result = validate_calendar_conflict(scheduled, tool_results)
+    if not calendar_conflict_result.valid:
+        errors.extend(calendar_conflict_result.errors)
+    
+    duration_result = validate_duration(scheduled, tool_results)
+    if not duration_result.valid:
+        errors.extend(duration_result.errors)
+
+    coverage_result = validate_coverage(scheduled, unscheduled, tool_results)
+    if not coverage_result.valid:
+        errors.extend(coverage_result.errors)
+
+    return ValidationResult(
+        valid=len(errors) == 0,
+        errors=errors
+    )
+
+
+def get_plan_intents(user_input):
     messages = []
     user_message = {
         "role": "user",
@@ -248,53 +280,53 @@ def get_candidate_plan(user_input):
     return "Sorry, I couldn't complete the request within the allowed number of steps.", tool_results
 
 
-def repair_plan(plan, tool_results):
-    repair_loop = 0
-    repair_logs = []
+# def repair_plan(plan, tool_results):
+#     repair_loop = 0
+#     repair_logs = []
 
-    while repair_loop < config.MAX_REPAIR_LOOP_COUNT:
-        repair_loop += 1
+#     while repair_loop < config.MAX_REPAIR_LOOP_COUNT:
+#         repair_loop += 1
 
-        validation_result = validate(plan, tool_results)
+#         validation_result = validate(plan, tool_results)
 
-        if validation_result.valid:
-            repair_logs.append({
-                "loop": repair_loop,
-                "invalid_plan": None,
-                "errors": "repair succeed",
-                "repaired_plan": plan
-            })
+#         if validation_result.valid:
+#             repair_logs.append({
+#                 "loop": repair_loop,
+#                 "invalid_plan": None,
+#                 "errors": "repair succeed",
+#                 "repaired_plan": plan
+#             })
 
-            return plan, repair_logs
+#             return plan, repair_logs
         
-        else:
+#         else:
 
-            repair_message = repair_prompt.get_repair_prompt(
-                                            plan, 
-                                            validation_result, 
-                                            tool_results["get_todo_items"]["todos"],
-                                            tool_results["get_calendar_events"]["events"])
+#             repair_message = repair_prompt.get_repair_prompt(
+#                                             plan, 
+#                                             validation_result, 
+#                                             tool_results["get_todo_items"]["todos"],
+#                                             tool_results["get_calendar_events"]["events"])
             
-            repaired_response = llm.call_llm_no_tool(repair_message)
-            invalid_plan = plan
+#             repaired_response = llm.call_llm_no_tool(repair_message)
+#             invalid_plan = plan
 
-            try:
-                repaired_plan = json.loads(repaired_response)
+#             try:
+#                 repaired_plan = json.loads(repaired_response)
 
-                repair_logs.append({
-                    "loop": repair_loop,
-                    "invalid_plan": invalid_plan,
-                    "errors": validation_result.errors,
-                    "repaired_plan": repaired_plan
-                })
+#                 repair_logs.append({
+#                     "loop": repair_loop,
+#                     "invalid_plan": invalid_plan,
+#                     "errors": validation_result.errors,
+#                     "repaired_plan": repaired_plan
+#                 })
 
-            except json.JSONDecodeError:
-                print("Failed to generate valid JSON from repaired response. Repair Failed.")
-                return None, repair_logs
+#             except json.JSONDecodeError:
+#                 print("Failed to generate valid JSON from repaired response. Repair Failed.")
+#                 return None, repair_logs
 
-            plan = repaired_plan
+#             plan = repaired_plan
             
-    return None, repair_logs
+#     return None, repair_logs
 
 
 def normalize(plan):
@@ -317,7 +349,7 @@ def get_busy_intervals(events: list[dict]) -> list[dict]:
 def get_free_intervals(busy_intervals: list[dict]) -> list[dict]:
     # let's hardcode full day for now
     day_start = parse_time("09:00")
-    day_end = parse_time("19:00")
+    day_end = parse_time("21:00")
 
     free_intervals = []
     cur_start = day_start
@@ -345,9 +377,10 @@ def get_free_intervals(busy_intervals: list[dict]) -> list[dict]:
 
 def get_priority(intent: dict) -> int:
     if intent["user_priority"] is not None:
-            return intent["user_priority"]
+            return int(intent["user_priority"])
+    
     if intent["inferred_priority"] is not None:
-        return intent["inferred_priority"]
+        return int(intent["inferred_priority"])
     return 999 # rest of the intents
 
 
@@ -390,6 +423,15 @@ def subtract_interval(free_intervals, occupied_start, occupied_end):
     return updated
     
 
+def get_candidate_windows(preferred_window: str) -> list[tuple[datetime, datetime]]:
+    windows = [get_window_range(preferred_window)]
+    flexible_window = get_window_range("flexible")
+    if flexible_window not in windows:
+        windows.append(flexible_window)
+
+    return windows
+
+
 def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
     calendar_events = tool_results["get_calendar_events"]["events"]
     todos = tool_results["get_todo_items"]["todos"]
@@ -421,32 +463,35 @@ def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
         if duration is None:
             continue
 
-        # for this duration, find the earliest valid free slot based on preferred_time_window
         preferred_time_window = intent["preferred_time_window"]
-        window_start, window_end = get_window_range(preferred_time_window)
+        
+        for window_start, window_end in get_candidate_windows(preferred_time_window):
+            for free_interval in free_intervals:
+                candidate_start = max(free_interval["start"], window_start)
+                candidate_end_limit = min(free_interval["end"], window_end)
 
-        for free_interval in free_intervals:
-            candidate_start = max(free_interval["start"], window_start)
-            candidate_end_limit = min(free_interval["end"], window_end)
+                candidate_end = add_minutes(candidate_start, duration)
+                
+                # task can fit in:
+                if candidate_end <= candidate_end_limit:
+                    # no need to split the task. Task is completely fit in this candidate window
+                    plan = {
+                        "todo_id": todo_id,
+                        "start": candidate_start.strftime("%H:%M"),
+                        "end": candidate_end.strftime("%H:%M"),
+                    }
+                    plans.append(plan)
 
-            candidate_end = add_minutes(candidate_start, duration)
+                    free_intervals = subtract_interval(
+                        free_intervals,
+                        candidate_start,
+                        candidate_end
+                    )
+
+                    placed = True
+                    break
             
-            if candidate_end <= candidate_end_limit:
-                # no need to split the task. Task is completely fit in this candidate window
-                plan = {
-                    "todo_id": todo_id,
-                    "start": candidate_start.strftime("%H:%M"),
-                    "end": candidate_end.strftime("%H:%M"),
-                }
-                plans.append(plan)
-
-                free_intervals = subtract_interval(
-                    free_intervals,
-                    candidate_start,
-                    candidate_end
-                )
-
-                placed = True
+            if placed:
                 break
         
         if not placed:
@@ -461,7 +506,7 @@ def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
 
 
 def run_agent(user_input: str) -> str:
-    response_content, tool_results = get_candidate_plan(user_input)
+    response_content, tool_results = get_plan_intents(user_input)
 
     try:
         planning_intents = json.loads(response_content)
@@ -470,12 +515,8 @@ def run_agent(user_input: str) -> str:
     
     scheduled, unscheduled = generate_concrete_plan(planning_intents, tool_results)
 
-    # repaired_plan, logs = repair_plan(plan, tool_results)
-    # if not repaired_plan:
-    #     print(logs)
-    #     return "I cannot generate a valid plan. Please try again."
-
-    # return normalize(repaired_plan)
+    validation_result = validate(scheduled, unscheduled, tool_results)
+    print(validation_result)
 
     return json.dumps({
         "scheduled": scheduled,

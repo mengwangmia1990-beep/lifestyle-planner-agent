@@ -1,8 +1,5 @@
-import os
 from agent import run_agent
 
-# main responsibilities:
-# 1. Handle user input and output
 
 def main():
     print("AI: Please enter your request:")

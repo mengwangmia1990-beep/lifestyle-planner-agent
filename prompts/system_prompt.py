@@ -58,6 +58,8 @@ The JSON schema is:
             
             "preferred_time_window": "morning | afternoon | evening | flexible",
             "preferred_start": "HH:MM or null",
+
+            "not_before": "HH:MM or null",
             
             "deep_work": true,
             "avoid_splitting": true,
@@ -74,9 +76,15 @@ Rules:
 - If user explicitly says a task is unnecessary or should be skipped:
   - set should_schedule=false
   - provide skip_reason
+
 - priority must be unique: 1 is highest priority.
 - preferred_start is only a hint for the backend, not a hard constraint.
 - If unsure about preferred_start, use null.
+
+- Only set not_before when the user explicitly says a task should happen after a specific time or after a calendar event.
+- If the user says a task should happen after a calendar event, use the calendar event's end time as not_before.
+- If unsure about not_before, use null.
+
 - Use deep_work=true for tasks requiring focus, learning, coding, writing, debugging, or complex reasoning.
 - Use avoid_splitting=true for deep work tasks.
 - Use flexible for simple errands or low-cognitive tasks.

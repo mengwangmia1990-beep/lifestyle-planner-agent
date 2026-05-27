@@ -101,6 +101,16 @@ def subtract_interval(free_intervals, occupied_start, occupied_end):
     return updated
 
 
+def parse_not_before(time_str):
+    if not time_str:
+        return None
+    
+    try:
+        return parse_time(time_str)
+    except Exception:
+        return None
+
+
 def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
     calendar_events = tool_results["get_calendar_events"]["events"]
     todos = tool_results["get_todo_items"]["todos"]
@@ -147,9 +157,15 @@ def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
 
         preferred_time_window = intent["preferred_time_window"]
         
+        not_before = parse_not_before(intent.get("not_before"))
+        
         for window_start, window_end in get_candidate_windows(preferred_time_window):
             for free_interval in free_intervals:
-                candidate_start = max(free_interval["start"], window_start)
+                candidate_start = max(
+                    free_interval["start"],
+                    window_start,
+                    not_before or window_start)
+                
                 candidate_end_limit = min(free_interval["end"], window_end)
 
                 candidate_end = add_minutes(candidate_start, duration)

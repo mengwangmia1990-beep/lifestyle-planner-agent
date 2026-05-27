@@ -151,11 +151,7 @@ def validate_calendar_conflict(tasks, tool_results):
         )
 
 
-def validate_coverage(scheduled, unscheduled, tool_results):
-    # this method will validate if scheduled and unscheduled plan cover all user's todo items.
-    # one task cannot be present in both scheduled and unscheduled list.
-    # validate if LLM will output unknown todo ids
-
+def validate_coverage(scheduled, unscheduled, skipped, tool_results):
     expected_todo_ids = {
         todo["todo_id"]
         for todo in tool_results["get_todo_items"]["todos"]
@@ -171,16 +167,23 @@ def validate_coverage(scheduled, unscheduled, tool_results):
         for task in unscheduled
     }
 
+    skipped_todo_ids = {
+        task["todo_id"]
+        for task in skipped
+    }
+
     errors = []
 
-    missing = expected_todo_ids - scheduled_todo_ids - unscheduled_todo_ids
-    duplicated = scheduled_todo_ids & unscheduled_todo_ids
-    unknown = (scheduled_todo_ids | unscheduled_todo_ids) - expected_todo_ids
+    missing = expected_todo_ids - scheduled_todo_ids - unscheduled_todo_ids - skipped_todo_ids
+    duplicated = (scheduled_todo_ids & unscheduled_todo_ids) | \
+                (scheduled_todo_ids & skipped_todo_ids) | \
+                (unscheduled_todo_ids & skipped_todo_ids)
+    unknown = (scheduled_todo_ids | unscheduled_todo_ids | skipped_todo_ids) - expected_todo_ids
 
     if missing:
         errors.append(f"missing todo ids: {missing}")
     if duplicated:
-        errors.append(f"duplicate todo ids: {duplicated}. Tasks cannot be scheduled and unscheduled at the same time.")
+        errors.append(f"duplicate todo ids: {duplicated}. Tasks cannot be scheduled, unscheduled or skipped at the same time.")
     if unknown:
         errors.append(f"unknown todo ids: {unknown}")
 
@@ -190,7 +193,7 @@ def validate_coverage(scheduled, unscheduled, tool_results):
     )
 
 
-def validate(scheduled, unscheduled, tool_results):
+def validate(scheduled, unscheduled, skipped, tool_results):
     errors = []
 
     for task in scheduled:
@@ -210,7 +213,7 @@ def validate(scheduled, unscheduled, tool_results):
     if not duration_result.valid:
         errors.extend(duration_result.errors)
 
-    coverage_result = validate_coverage(scheduled, unscheduled, tool_results)
+    coverage_result = validate_coverage(scheduled, unscheduled, skipped, tool_results)
     if not coverage_result.valid:
         errors.extend(coverage_result.errors)
 

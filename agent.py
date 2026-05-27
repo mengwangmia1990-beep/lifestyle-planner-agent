@@ -68,12 +68,13 @@ def run_agent(user_input: str) -> str:
     except json.JSONDecodeError:
         return ""
     
-    scheduled, unscheduled = scheduler.generate_concrete_plan(planning_intents, tool_results)
+    scheduled, unscheduled, skipped = scheduler.generate_concrete_plan(planning_intents, tool_results)
 
-    validation_result = validators.validate(scheduled, unscheduled, tool_results)
+    validation_result = validators.validate(scheduled, unscheduled, skipped, tool_results)
     print(validation_result)
 
     return json.dumps({
         "scheduled": scheduled,
-        "unscheduled": unscheduled
+        "unscheduled": unscheduled,
+        "skipped": skipped
     }, indent=2)

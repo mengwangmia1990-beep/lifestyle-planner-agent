@@ -113,7 +113,20 @@ def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
 
     # 3. sort todos by explicit_user_priority / inferred_priority / original order
     intents = planning_intents["planning_intents"]
-    intents.sort(key=get_priority)
+
+    scheduled_candidate_intents = []
+    skipped_intents = []
+
+    for intent in intents:
+        if intent.get("should_schedule", True):
+            scheduled_candidate_intents.append(intent)
+        else:
+            skipped_intents.append({
+                "todo_id": intent["todo_id"],
+                "reason": intent["skip_reason"]
+            })
+
+    scheduled_candidate_intents.sort(key=get_priority)
     
     # 4. place each todo into earliest valid free slot based on preferred_time_window
     todo_map = {}
@@ -123,7 +136,7 @@ def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
     plans = []
     unscheduled = []
 
-    for intent in intents:
+    for intent in scheduled_candidate_intents:
         placed = False
         
         todo_id = intent["todo_id"]
@@ -169,6 +182,5 @@ def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
                 "reason": "No valid free slot found"
             })
 
-
     # 5. return scheduled tasks and unscheduled tasks
-    return plans, unscheduled
+    return plans, unscheduled, skipped_intents

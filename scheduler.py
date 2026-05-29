@@ -118,7 +118,7 @@ def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
     # 1. convert calendar events to busy intervals
     busy_intervals = get_busy_intervals(calendar_events)
 
-    # 2. generate free intervals (from 9:00 AM to 6:00 PM)
+    # 2. generate free intervals (from 9:00 AM to 9:00 PM)
     free_intervals = get_free_intervals(busy_intervals)
 
     # 3. sort todos by explicit_user_priority / inferred_priority / original order
@@ -133,7 +133,7 @@ def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
         else:
             skipped_intents.append({
                 "todo_id": intent["todo_id"],
-                "reason": intent["skip_reason"]
+                "reason": intent.get("skip_reason", "Marked as not schedulable")
             })
 
     scheduled_candidate_intents.sort(key=get_priority)
@@ -153,6 +153,10 @@ def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
         default_duration = todo_map.get(todo_id)
 
         if default_duration is None:
+            unscheduled.append({
+                "todo_id": todo_id,
+                "reason": f"todo id {todo_id} not found in the tool results"
+            })
             continue
 
         preferred_time_window = intent["preferred_time_window"]
@@ -170,7 +174,7 @@ def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
                 
                 candidate_end_limit = min(free_interval["end"], window_end)
 
-                duration = override_duration if override_duration is not None else default_duration
+                duration = int(override_duration) if override_duration is not None else default_duration
                 candidate_end = add_minutes(candidate_start, duration)
                 
                 # task can fit in:

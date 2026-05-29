@@ -199,6 +199,35 @@ def validate_coverage(scheduled, unscheduled, skipped, tool_results):
     )
 
 
+def validate_not_before(scheduled, planning_intents):
+    errors = []
+
+    not_before_intents = {}
+
+    for intent in planning_intents["planning_intents"]:
+        if intent.get("not_before") is not None:
+            not_before_intents[intent["todo_id"]] = intent
+    
+    for task in scheduled:
+        todo_id = task["todo_id"]
+        if todo_id in not_before_intents:
+            try:
+                task_start = parse_time(task["start"])
+                not_before_time = parse_time(not_before_intents[todo_id].get("not_before"))
+                if task_start  < not_before_time:
+                    errors.append(
+                        f"task {todo_id} starts at {task_start}, "
+                        f"which is before not_before constraint {not_before_time}" 
+                    )
+            except Exception as e:
+                errors.append(f"Failed to validate not_before for task {todo_id}. Error {e}")
+
+    return ValidationResult(
+        valid=len(errors)==0,
+        errors=errors
+    )
+
+
 def validate(scheduled, unscheduled, skipped, tool_results, planning_intents):
     errors = []
 
@@ -222,6 +251,10 @@ def validate(scheduled, unscheduled, skipped, tool_results, planning_intents):
     coverage_result = validate_coverage(scheduled, unscheduled, skipped, tool_results)
     if not coverage_result.valid:
         errors.extend(coverage_result.errors)
+
+    not_before_result = validate_not_before(scheduled, planning_intents)
+    if not not_before_result.valid:
+        errors.extend(not_before_result.errors)
 
     return ValidationResult(
         valid=len(errors) == 0,

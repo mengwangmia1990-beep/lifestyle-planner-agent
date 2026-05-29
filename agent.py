@@ -6,6 +6,7 @@ import config
 from models.validation_models import ValidationResult
 import scheduler
 import validators
+from datetime import date
 
 
 def get_plan_intents(user_input):
@@ -55,9 +56,76 @@ def get_plan_intents(user_input):
     return "Sorry, I couldn't complete the request within the allowed number of steps.", tool_results
 
 
-def normalize(plan):
-    # TODO: add normalization logic
-    return plan
+def generate_plan_summary(normalized_plan, tool_results):
+    lines = []
+    scheduled = normalized_plan["scheduled"]
+    unscheduled = normalized_plan["unscheduled"]
+    skipped = normalized_plan["skipped"]
+
+    id_to_tool_name = {}
+    for todo in tool_results["get_todo_items"]["todos"]:
+        todo_id = todo["todo_id"]
+        name = todo["title"]
+        id_to_tool_name[todo_id] = name
+
+    if scheduled:
+        lines.append("Here is your plan:")
+        for task in scheduled:
+            task_name = id_to_tool_name[task["todo_id"]]
+            start = task["start"]
+            end = task["end"]
+            
+            lines.append(f"{start} -- {end}: {task_name}")
+
+    if unscheduled:
+        lines.append("")
+        lines.append("Unscheduled plan:")
+        for task in unscheduled:
+            task_name = id_to_tool_name[task["todo_id"]]
+            lines.append(f"{task_name}, reason: {task.get("reason", "No reason provided.")}")
+
+    if skipped:
+        lines.append("")
+        lines.append("Skipped plan:")
+        for task in skipped:
+            task_name = id_to_tool_name[task["todo_id"]]
+            lines.append(f"{task_name}, reason: {task.get("reason", "Skipped.")}")
+
+    return "\n".join(lines)
+
+
+def normalize(scheduled, unscheduled, skipped):
+    scheduled.sort(key=lambda x:x["start"])
+
+    return {
+        "scheduled": scheduled,
+        "unscheduled": unscheduled,
+        "skipped": skipped
+    }
+
+
+def ensure_required_tool_results(tool_results):
+    """
+    Ensure backend scheduler has all required context tool results.
+    Do not rely on LLM to always call every required tool.
+    """
+
+    today = date.today().isoformat()
+    REQUIRED_CONTEXT_TOOLS = {
+        "get_calendar_events": {
+            "date": today
+        },
+        "get_todo_items": {
+            "date": today
+        },
+    }
+
+    for tool_name, args in REQUIRED_CONTEXT_TOOLS.items():
+        if tool_name not in tool_results:
+            result = tool_registry.TOOL_MAP[tool_name](**args)
+            tool_results[tool_name] = result
+    
+    return tool_results
 
 
 def run_agent(user_input: str) -> str:
@@ -68,13 +136,36 @@ def run_agent(user_input: str) -> str:
     except json.JSONDecodeError:
         return ""
     
+    # Sometimes LLM does not call all required tools. We cannot only reply on LLM.
+    # Therefore we ensure all required tools to be called before sending to scheduler.
+    tool_results = ensure_required_tool_results(tool_results)
+    
+    # Generate concrete plan
     scheduled, unscheduled, skipped = scheduler.generate_concrete_plan(planning_intents, tool_results)
 
+    # Validate plan
     validation_result = validators.validate(scheduled, unscheduled, skipped, tool_results, planning_intents)
-    print(validation_result)
 
-    return json.dumps({
-        "scheduled": scheduled,
-        "unscheduled": unscheduled,
-        "skipped": skipped
-    }, indent=2)
+    if validation_result.valid:
+        normalized_plan = normalize(scheduled, unscheduled, skipped)
+        summary = generate_plan_summary(normalized_plan, tool_results)
+
+        print(summary)
+
+        return json.dumps({
+            "status": "success",
+            "summary": summary,
+            "plan": normalized_plan
+        })
+    else:
+        print(validation_result)
+        return json.dumps({
+            "status": "failed",
+            "summary": "Failed to generate plan",
+            "errors": validation_result.errors,
+            "plan": {
+                "scheduled": scheduled,
+                "unscheduled": unscheduled,
+                "skipped": skipped
+            }
+        })

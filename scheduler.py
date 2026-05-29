@@ -112,6 +112,12 @@ def parse_not_before(time_str):
 
 
 def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
+    if "get_calendar_events" not in tool_results:
+        raise ValueError("Missing required context: get_calendar_events")
+    
+    if "get_todo_items" not in tool_results:
+        raise ValueError("Missing required context: get_todo_items")
+
     calendar_events = tool_results["get_calendar_events"]["events"]
     todos = tool_results["get_todo_items"]["todos"]
 

@@ -1,6 +1,6 @@
 # AI Lifestyle Planner Agent
 
-A lightweight AI agent system that combines LLM reasoning with deterministic backend scheduling and validation.
+A lightweight AI agent system that combines LLM reasoning with deterministic backend scheduling, validation and normalization.
 
 This project explores how to build reliable AI agents from scratch using OpenAI tool-calling APIs, without relying on orchestration frameworks such as LangChain or LangGraph.
 
@@ -27,7 +27,7 @@ The system:
 3. extract planning intents
 4. generate deterministic schedule
 5. validate on hard constraints
-6. return strucutred plan
+6. return normalized plan
 
 
 ## Key Features
@@ -118,6 +118,50 @@ Current validations include:
 - `not_before`constraint validation
 - todo items coverage validation
 
+### Normalization
+A normalization layer translates the validated raw plan into a structured plan. Without normalization, the raw plan can be:  
+- unsorted
+- without task title
+
+Normalization layer sorts the intervals by chronological order, generates the structured planning summary, status, and structured plan.  
+
+
+## Architecture Evolution: LLM-heavy Planning vs Hybrid Systems
+
+### Iteration 1: LLM-heavy Planning
+
+LLM generates:
+- todo_id
+- start
+- end
+
+Problems:
+- unstable repair loop
+- poor converges
+
+---
+### Iteration 2: Hybrid Architecture
+
+The current hybrid architecture moves deterministic logic into the backend. And removed the LLM based repair loop.  
+
+LLM responsibilities:
+- understand user intent
+- prioritize tasks
+- reason about user preferences
+- generate high-level planning intent
+
+Backend responsibilities:
+- deterministic duration calculation
+- interval allocation
+- overlap prevention
+- conflict resolution
+- final schedule generation
+
+This transition reflects a common industrial pattern in modern AI agent systems:
+
+> LLM + deterministic backend systems
+
+
 ## Core Engineering Challenges
 ### 1. LLMs Are Weak at Deterministic Scheduling
 Initial iterations allowed the LLM to generate fully concrete schedules directly.  
@@ -168,83 +212,11 @@ These issues motivated:
 - normalization layers
 - stricter backend contracts
 
----
+### 4. Latency Issue
+latency issue is hard to ignored in current project MVP. Single query takes more than a few seconds to provide a final result. The main issue is about sequentially calling all the availble tools. In this iteration, `get_calender_events` and `get_todo_items` can be called in parallel since they are not dependent on each other. Next iteration will call these tools in parallel to reduce the overall latency.
 
-## Architecture Evolution: LLM-heavy Planning vs Hybrid Systems
-
-### Iteration 1: LLM-heavy Planning
-
-LLM generates:
-- todo_id
-- start
-- end
-
-Problems:
-- unstable repair loop
-- poor converges
-
----
-### Iteration 2: Hybrid Architecture
-
-The current hybrid architecture moves deterministic logic into the backend. And removed the LLM based repair loop.  
-
-LLM responsibilities:
-- understand user intent
-- prioritize tasks
-- reason about user preferences
-- generate high-level planning intent
-
-Backend responsibilities:
-- deterministic duration calculation
-- interval allocation
-- overlap prevention
-- conflict resolution
-- final schedule generation
-
-This transition reflects a common industrial pattern in modern AI agent systems:
-
-> LLM + deterministic backend systems
-
-
-## Common technical issues
-### 1. LLM Does Not Always Return Valid Raw JSON
-Even with explicit prompt constraints, the LLM may still wrap the JSON output inside markdown code blocks such as:
-
-```text
-```json
-{
-    ...
-}
-```
-
-This causes `json.loads()` to fail.  
-
-To improve robustness, we strengthened the prompt instructions to explicitly require:
-
-- raw JSON only
-- no markdown formatting
-- no extra explanations
-
-Future improvement:
-- add a backend JSON extraction layer before parsing.
-
----
-
-### 2. Valid Plan Does Not Always Mean Human-Readable Plan
-Even if the generated plan passes validation, the output may still be difficult to read or poorly organized.
-
-For example:
-- tasks may not be sorted chronologically
-- task ordering may look unnatural to humans
-- formatting may be inconsistent
-
-These issues are considered **presentation problems** rather than validation failures.
 
 ## Future improvement:
-- introduce a normalization layer to:
-  - sort tasks by start time
-  - standardize task schema
-  - improve readability of final output
 - parallel tool calling
 - observability and tracing
 - evaluation pipeline

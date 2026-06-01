@@ -7,4 +7,3 @@ logs/
 storage/
 
 *.db
-*.jsonl

@@ -131,8 +131,6 @@ def ensure_required_tool_results(tool_results):
 
 
 def set_trace(user_input, planning_intents, scheduled, unscheduled, skipped, validation_result):
-    runtime_trace_file = os.path.join(config.LOGS_FILE, config.TRACE_FILE_NAME)
-
     status = "success" if validation_result.valid else "failed"
     intents = planning_intents["planning_intents"]
     trace = {
@@ -144,8 +142,7 @@ def set_trace(user_input, planning_intents, scheduled, unscheduled, skipped, val
         "skipped": skipped,
         "validation_result": asdict(validation_result)
     }
-    print(type(validation_result))
-    with open(runtime_trace_file, "a", encoding="utf-8") as f:
+    with open(config.TRACE_FILE, "a", encoding="utf-8") as f:
         f.write(json.dumps(trace, ensure_ascii=False) + "\n")
 
 

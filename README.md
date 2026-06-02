@@ -1,6 +1,6 @@
 # AI Lifestyle Planner Agent
 
-A lightweight AI agent system that combines LLM reasoning with deterministic backend scheduling, validation and normalization.
+A lightweight AI agent system that combines LLM reasoning with deterministic backend scheduling, validation, normalization, observabilitiy and evaluation pipeline.
 
 This project explores how to build reliable AI agents from scratch using OpenAI tool-calling APIs, without relying on orchestration frameworks such as LangChain or LangGraph.
 
@@ -17,6 +17,8 @@ The project focuses heavily on:
 - validation pipelines
 - hybrid AI system design
 - architecture evolution
+- observation
+- evaluation
 
 ## Example User Query
 User: *Help me plan tomorrow. I want to go grocery shopping first and plan rest of the things after picking up kid.*
@@ -125,6 +127,37 @@ A normalization layer translates the validated raw plan into a structured plan. 
 
 Normalization layer sorts the intervals by chronological order, generates the structured planning summary, status, and structured plan.  
 
+### Observability
+The agent generates strucutred runtime traces for every execution.  
+
+Each trace record:  
+- user input
+- execution status
+- planning intents
+- scheduled tasks
+- unscheduled tasks
+- skipped tasks
+- validation results
+
+These traces facilate debugging, failure anlaysis, and evaluation pipeline.
+
+### Evaluation (on-going)
+The project includes an end-to-end evaluation pipeline based on golden test cases.  
+
+Components:
+- `gold_data.jsonl`
+- `e2e_eval_runner.py`
+- runtime trace collection
+- Expect vs Actual comparison
+- Failure categorization
+
+Observed failure categories:  
+- Constraint Hallucination
+- Coverage Missing
+- Duration Hallucination
+- Unsupported Feature Leakage
+
+
 
 ## Architecture Evolution: LLM-heavy Planning vs Hybrid Systems
 
@@ -218,8 +251,6 @@ latency issue is hard to ignored in current project MVP. Single query takes more
 
 ## Future improvement:
 - parallel tool calling
-- observability and tracing
-- evaluation pipeline
 - FastAPI service wrapper
 
 

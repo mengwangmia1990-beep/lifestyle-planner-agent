@@ -7,6 +7,8 @@ from models.validation_models import ValidationResult
 import scheduler
 import validators
 from datetime import date
+import os
+from  dataclasses import asdict
 
 
 def get_plan_intents(user_input):
@@ -128,6 +130,25 @@ def ensure_required_tool_results(tool_results):
     return tool_results
 
 
+def set_trace(user_input, planning_intents, scheduled, unscheduled, skipped, validation_result):
+    runtime_trace_file = os.path.join(config.LOGS_FILE, config.TRACE_FILE_NAME)
+
+    status = "success" if validation_result.valid else "failed"
+    intents = planning_intents["planning_intents"]
+    trace = {
+        "query": user_input,
+        "status": status,
+        "planning_intents": intents,
+        "scheduled": scheduled,
+        "unscheduled": unscheduled,
+        "skipped": skipped,
+        "validation_result": asdict(validation_result)
+    }
+    print(type(validation_result))
+    with open(runtime_trace_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps(trace, ensure_ascii=False) + "\n")
+
+
 def run_agent(user_input: str) -> str:
     response_content, tool_results = get_plan_intents(user_input)
 
@@ -146,11 +167,13 @@ def run_agent(user_input: str) -> str:
     # Validate plan
     validation_result = validators.validate(scheduled, unscheduled, skipped, tool_results, planning_intents)
 
+    # Set runtime trace
+    set_trace(user_input, planning_intents, scheduled, unscheduled, skipped, validation_result)
+
+    # Normalization
     if validation_result.valid:
         normalized_plan = normalize(scheduled, unscheduled, skipped)
         summary = generate_plan_summary(normalized_plan, tool_results)
-
-        print(summary)
 
         return json.dumps({
             "status": "success",

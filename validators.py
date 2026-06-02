@@ -1,15 +1,18 @@
-from models.validation_models import ValidationResult
+from models.validation_models import ValidationResult, CheckResult
 from time_utils import parse_time
+import config
 
 
-def validate_interval(task: dict) -> ValidationResult:
+def validate_interval(task: dict) -> CheckResult:
+    check_name = config.CHECK_NAME_VALID_INTERVAL
     try:
         start_time = parse_time(task["start"])
         end_time = parse_time(task["end"])
         todo_id = task.get("todo_id")
         if not todo_id:
-            return ValidationResult(
-            valid=False,
+            return CheckResult(
+            name=check_name,
+            passed=False,
             errors=["Cannot extract todo_id of given task."]
         )
 
@@ -18,20 +21,22 @@ def validate_interval(task: dict) -> ValidationResult:
         if start_time >= end_time:
             errors.append(f"invalid interval for task {todo_id} start: {start_time} end: {end_time}")
         
-        return ValidationResult(
-            valid=len(errors) == 0,
+        return CheckResult(
+            name=check_name,
+            passed=len(errors) == 0,
             errors=errors
         )
 
     except Exception as e:
-        print("Error", e)
-        return ValidationResult(
-            valid=False,
+        return CheckResult(
+            name=check_name,
+            passed=False,
             errors=[f"failed to validate interval. Error {e}"]
         )
 
 
 def validate_overlap(tasks):
+    check_name = config.CHECK_NAME_VALID_OVERLAP
     intervals = []
     errors = []
 
@@ -68,19 +73,22 @@ def validate_overlap(tasks):
                 )
             
         # no overlap --> pass validation
-        return ValidationResult(
-            valid=len(errors) == 0,
+        return CheckResult(
+            name=check_name,
+            passed=len(errors) == 0,
             errors=errors
         )
     except Exception as e:
-        print("Error", e)
-        return ValidationResult(
-            valid=False,
+        return CheckResult(
+            name=check_name,
+            passed=False,
             errors=[f"failed to validate interval overlap. Error {e}"]
         )
 
 
 def validate_duration(tasks, planning_intents, tool_results):
+    check_name = config.CHECK_NAME_DURATION_CORRECT
+
     # aggregate by todo_id, construct a dict for actual tasks
     actual_todo_duration = {}
     for task in tasks:
@@ -118,13 +126,15 @@ def validate_duration(tasks, planning_intents, tool_results):
             duration_error = f"task {todo_id} duration {duration} does not match with expected duration {expected_duration}"
             errors.append(duration_error)
 
-    return ValidationResult(
-        valid=len(errors) == 0,
+    return CheckResult(
+        name=check_name,
+        passed=len(errors) == 0,
         errors=errors
     )
 
 
 def validate_calendar_conflict(tasks, tool_results):
+    check_name = config.CHECK_NAME_RESPECT_BUSY_CALENDAR
     errors = []
     events = tool_results.get("get_calendar_events", {}).get("events", [])
 
@@ -146,18 +156,21 @@ def validate_calendar_conflict(tasks, tool_results):
                         f"{task['start']}-{task['end']} conflicts with calendar event "
                         f"{event_title} {event['start']}-{event['end']}"
                     )
-        return ValidationResult(
-            valid=len(errors)==0,
+        return CheckResult(
+            name=check_name,
+            passed=len(errors)==0,
             errors=errors
         )
     except Exception as e:
-        return ValidationResult(
-            valid=False,
+        return CheckResult(
+            name=check_name,
+            passed=False,
             errors=[f"failed to validate calendar conflicts. Error {e}"]
         )
 
 
 def validate_coverage(scheduled, unscheduled, skipped, tool_results):
+    check_name = config.CHECK_NAME_COVERAGE_CORRECT
     expected_todo_ids = {
         todo["todo_id"]
         for todo in tool_results["get_todo_items"]["todos"]
@@ -193,13 +206,15 @@ def validate_coverage(scheduled, unscheduled, skipped, tool_results):
     if unknown:
         errors.append(f"unknown todo ids: {unknown}")
 
-    return ValidationResult(
-        valid=len(errors) == 0,
+    return CheckResult(
+        name=check_name,
+        passed=len(errors) == 0,
         errors=errors
     )
 
 
 def validate_not_before(scheduled, planning_intents):
+    check_name = config.CHECK_NAME_NOT_BEFORE_CORRECT
     errors = []
 
     not_before_intents = {}
@@ -222,41 +237,56 @@ def validate_not_before(scheduled, planning_intents):
             except Exception as e:
                 errors.append(f"Failed to validate not_before for task {todo_id}. Error {e}")
 
-    return ValidationResult(
-        valid=len(errors)==0,
+    return CheckResult(
+        name=check_name,
+        passed=len(errors)==0,
         errors=errors
     )
 
 
+def aggregate_checks(check_results):
+    checks = {}
+    for check_result in check_results:
+        checks[check_result.name] = check_result.passed
+    
+    return checks
+    
+
 def validate(scheduled, unscheduled, skipped, tool_results, planning_intents):
     errors = []
+    check_results = []
 
     for task in scheduled:
         interval_result = validate_interval(task)
-        if not interval_result.valid:
+        if not interval_result.passed:
             errors.extend(interval_result.errors)
     
     overlap_result = validate_overlap(scheduled)
-    if not overlap_result.valid:
+    if not overlap_result.passed:
         errors.extend(overlap_result.errors)
 
     calendar_conflict_result = validate_calendar_conflict(scheduled, tool_results)
-    if not calendar_conflict_result.valid:
+    check_results.append(calendar_conflict_result)
+    if not calendar_conflict_result.passed:
         errors.extend(calendar_conflict_result.errors)
     
     duration_result = validate_duration(scheduled, planning_intents, tool_results)
-    if not duration_result.valid:
+    check_results.append(duration_result)
+    if not duration_result.passed:
         errors.extend(duration_result.errors)
 
     coverage_result = validate_coverage(scheduled, unscheduled, skipped, tool_results)
-    if not coverage_result.valid:
+    check_results.append(coverage_result)
+    if not coverage_result.passed:
         errors.extend(coverage_result.errors)
 
     not_before_result = validate_not_before(scheduled, planning_intents)
-    if not not_before_result.valid:
+    check_results.append(not_before_result)
+    if not not_before_result.passed:
         errors.extend(not_before_result.errors)
 
     return ValidationResult(
         valid=len(errors) == 0,
+        checks=aggregate_checks(check_results),
         errors=errors
     )

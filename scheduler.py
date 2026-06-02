@@ -190,6 +190,7 @@ def generate_concrete_plan(planning_intents: dict, tool_results: dict) -> dict:
                         "todo_id": todo_id,
                         "start": candidate_start.strftime("%H:%M"),
                         "end": candidate_end.strftime("%H:%M"),
+                        "duration_minutes": duration
                     }
                     plans.append(plan)
 

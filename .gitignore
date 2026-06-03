@@ -7,3 +7,5 @@ logs/
 storage/
 
 *.db
+
+eval/log/

@@ -144,9 +144,11 @@ def set_trace(user_input, planning_intents, scheduled, unscheduled, skipped, val
     }
     with open(config.TRACE_FILE, "a", encoding="utf-8") as f:
         f.write(json.dumps(trace, ensure_ascii=False) + "\n")
+    
+    return trace
 
 
-def run_agent(user_input: str) -> str:
+def run_agent(user_input):
     response_content, tool_results = get_plan_intents(user_input)
 
     try:
@@ -165,7 +167,7 @@ def run_agent(user_input: str) -> str:
     validation_result = validators.validate(scheduled, unscheduled, skipped, tool_results, planning_intents)
 
     # Set runtime trace
-    set_trace(user_input, planning_intents, scheduled, unscheduled, skipped, validation_result)
+    trace = set_trace(user_input, planning_intents, scheduled, unscheduled, skipped, validation_result)
 
     # Normalization
     if validation_result.valid:
@@ -176,9 +178,8 @@ def run_agent(user_input: str) -> str:
             "status": "success",
             "summary": summary,
             "plan": normalized_plan
-        })
+        }), trace, tool_results
     else:
-        print(validation_result)
         return json.dumps({
             "status": "failed",
             "summary": "Failed to generate plan",
@@ -188,4 +189,4 @@ def run_agent(user_input: str) -> str:
                 "unscheduled": unscheduled,
                 "skipped": skipped
             }
-        })
+        }), trace, tool_results

@@ -154,7 +154,33 @@ def run_agent(user_input):
     try:
         planning_intents = json.loads(response_content)
     except json.JSONDecodeError:
-        return ""
+        return json.dumps({
+            "status": "failed",
+            "summary": "Failed to parse planning intents JSON",
+            "errors": ["Failed to parse planning intents JSON"],
+            "plan": {
+                "scheduled": [],
+                "unscheduled": [],
+                "skipped": []
+            }
+        }), {
+            "query": user_input,
+            "status": "failed",
+            "planning_intents": [],
+            "scheduled": [],
+            "unscheduled": [],
+            "skipped": [],
+            "validation_result": {
+                "valid": False,
+                "checks": {
+                    "respect_busy_calendar": False,
+                    "duration_correct": False,
+                    "coverage_correct": False,
+                    "not_before_correct": False
+                },
+                "errors": ["Failed to parse planning intents JSON"]
+            }
+        }, tool_results
     
     # Sometimes LLM does not call all required tools. We cannot only reply on LLM.
     # Therefore we ensure all required tools to be called before sending to scheduler.

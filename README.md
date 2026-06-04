@@ -141,7 +141,7 @@ Each trace record:
 
 These traces facilate debugging, failure anlaysis, and evaluation pipeline.
 
-### Evaluation (on-going)
+### Evaluation Analysis
 The project includes an end-to-end evaluation pipeline based on golden test cases.  
 
 Components:
@@ -150,12 +150,46 @@ Components:
 - runtime trace collection
 - Expect vs Actual comparison
 - Failure categorization
+- summary report generation
 
-Observed failure categories:  
-- Constraint Hallucination
-- Coverage Missing
-- Duration Hallucination
-- Unsupported Feature Leakage
+#### Failure Categories
+- duration failures:
+    - DURATION_VALUE_MISMATCH
+    - MISSING_EXPECTED_OVERRIDE_DURATION
+    - DURATION_HALLUCINATION
+- not_before failures:
+    - NOT_BEFORE_VALUE_MISMATCH
+    - NOT_BEFORE_MISSING
+    - NOT_BEFORE_HALLUCINATION
+- calendar conflict:
+    - CONFLICT_WITH_CALENDAR
+- scheduling failures:
+    - SCHEDULED_TASK_SET_MISMATCH
+    - UNSCHEDULED_TASK_SET_MISMATCH
+    - SKIPPED_TASK_SET_MISMATCH
+- intent coverage failure:
+    - INTENT_COVERAGE_MISSING
+- dependency order failure:
+    - DEPENDENCY_ORDER_INCORRECT
+
+#### Evaluation Result
+```jsonl
+{
+  "total": 26,
+  "passed": 14,
+  "failed": 8,
+  "supported_case": 22,
+  "unsupported_case": 4,
+  "supported_pass_rate": 63.64,
+  "NOT_BEFORE_HALLUCINATION": 6,
+  "UNSUPPORTED_CASE": 4,
+  "NOT_BEFORE_VALUE_MISMATCH": 1,
+  "SCHEDULED_TASK_SET_MISMATCH": 1,
+  "INTENT_COVERAGE_MISSING": 1,
+  "STATUS_MISMATCH": 1
+}
+```
+Above summary report shows that the most dominant failure mode comes from **LLM over-inferring hard time constraints (not_before)**. Scheduler and validation components are generally stable.
 
 
 

@@ -189,8 +189,35 @@ Components:
   "STATUS_MISMATCH": 1
 }
 ```
-Above summary report shows that the most dominant failure mode comes from **LLM over-inferring hard time constraints (not_before)**. Scheduler and validation components are generally stable.
+Above summary report shows that the most dominant failure mode comes from **LLM over-inferring hard time constraints (not_before)**. Scheduler and validation components are generally stable.  
 
+#### Not-before Hallucination Summary
+This dominant failure mode surfaced that **the planner frequently inferred temporal constraints from calendar events, task semantics, or scheduling heuristics rather than explicit user instructions**. In many cases, relative ordering constraints (e.g., "first", "then", "last") were incorrectly converted into absolute time constraints.  
+
+This indicates a planner-scheduler boundary violation, where the planner performs implicit scheduling decisions instead of purely extracting user intent.  
+
+#### Not_before Hallucination Hotfix
+We did a few round of system prompt update, however, it is not efficient enough to resolve the over-infer issue for not_before.  
+
+Therefore, instead of attempting to adjust the systemm prompt in a few more rounds, we added an `intent cleanup layer` to remove hallucinated not_before constraints. In MVP scope, we adopted a rule-based deterministic logic instead of adopting LLM based judge.  
+
+We reran the eval runner, and generated the new summary report.  
+```json
+{
+  "total": 26,
+  "passed": 19,
+  "failed": 3,
+  "supported_case": 22,
+  "unsupported_case": 4,
+  "supported_pass_rate": 86.36,
+  "UNSUPPORTED_CASE": 4,
+  "NOT_BEFORE_VALUE_MISMATCH": 1,
+  "NOT_BEFORE_HALLUCINATION": 1,
+  "SCHEDULED_TASK_SET_MISMATCH": 1,
+  "SKIPPED_TASK_SET_MISMATCH": 1
+}
+```
+The above summary showed the dramastic drop for `not_before_hallucination` from previous 7 cases to only 1. And majorly improved the overall supported pass rate from 63.64% to 86.36%.
 
 
 ## Architecture Evolution: LLM-heavy Planning vs Hybrid Systems

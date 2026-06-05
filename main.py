@@ -15,7 +15,7 @@ def main():
             print("AI: Please enter a valid request.")
             continue
 
-        response, trace = run_agent(user_input)
+        response, trace, tool_results = run_agent(user_input)
         print(f"AI: {response}")
 
 

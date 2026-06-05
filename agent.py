@@ -148,6 +148,28 @@ def set_trace(user_input, planning_intents, scheduled, unscheduled, skipped, val
     return trace
 
 
+def clear_ungrounded_not_before(intents, user_query):
+    q = user_query.lower()
+
+    has_explicit_time_anchor = any(x in q for x in [
+        "after lunch", "after pickup", "after dinner",
+        "after 1", "after 2", "after 3", "after 4", "after 5",
+        "after 6", "after 7", "after 8", "after 9",
+        "not before", "later than", "after having lunch",
+        "after picking up", "after grocery shopping", "after study",
+        "after work", "after go grocery shopping"
+    ])
+    
+    for intent in intents["planning_intents"]:
+        if intent.get("not_before") is None:
+            continue
+
+        if not has_explicit_time_anchor:
+            intent["not_before"] = None
+
+    return intents
+
+
 def run_agent(user_input):
     response_content, tool_results = get_plan_intents(user_input)
 
@@ -181,6 +203,9 @@ def run_agent(user_input):
                 "errors": ["Failed to parse planning intents JSON"]
             }
         }, tool_results
+    
+    # not_before hallucination cleanup
+    planning_intents = clear_ungrounded_not_before(planning_intents, user_input)
     
     # Sometimes LLM does not call all required tools. We cannot only reply on LLM.
     # Therefore we ensure all required tools to be called before sending to scheduler.

@@ -84,14 +84,14 @@ def generate_plan_summary(normalized_plan, tool_results):
         lines.append("Unscheduled plan:")
         for task in unscheduled:
             task_name = id_to_tool_name[task["todo_id"]]
-            lines.append(f"{task_name}, reason: {task.get("reason", "No reason provided.")}")
+            lines.append(f"{task_name}, reason: {task.get('reason', 'No reason provided.')}")
 
     if skipped:
         lines.append("")
         lines.append("Skipped plan:")
         for task in skipped:
             task_name = id_to_tool_name[task["todo_id"]]
-            lines.append(f"{task_name}, reason: {task.get("reason", "Skipped.")}")
+            lines.append(f"{task_name}, reason: {task.get('reason', 'Skipped.')}")
 
     return "\n".join(lines)
 

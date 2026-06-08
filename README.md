@@ -1,97 +1,77 @@
 # AI Lifestyle Planner Agent
 
-A lightweight AI agent system that combines LLM reasoning with deterministic backend scheduling, validation, normalization, observabilitiy and evaluation pipeline.
+AI lifestyle planner agent that combines LLM reasoning with deterministic backend scheduling, validation, runtime tracing, evaluation, and FastAPI-based service exposure.
 
 This project explores how to build reliable AI agents from scratch using OpenAI tool-calling APIs, without relying on orchestration frameworks such as LangChain or LangGraph.
 
-Unlike many purely LLM-driven agent systems, this project gradually evolves toward a hybrid architecture:
+This project follows a hybrid architecture:
+- LLMs handle semantic reasoning and user intent extraction
+- Backend systems handle deterministic scheduling and hard constraints
 
-LLMs handle semantic reasoning and user intent understanding
-Backend systems handle deterministic scheduling and hard constraints
 
-The project focuses heavily on:
+## Example Workflow
 
-- multi-step agent orchestration
-- tool calling
-- deterministic backend scheduling
-- validation pipelines
-- hybrid AI system design
-- architecture evolution
-- observation
-- evaluation
+User:  
+*Help me plan tomorrow. I want to go grocery shopping first and plan the rest of my tasks after picking up my kid.*
 
-## Example User Query
-User: *Help me plan tomorrow. I want to go grocery shopping first and plan rest of the things after picking up kid.*
+System:
+1. Retrieve calendar events and todo items
+2. Extract planning intents using LLM
+3. Generate a deterministic schedule
+4. Validate hard constraints
+5. Produce a normalized plan and runtime trace
 
-The system:  
-1. retrieve calendar events
-2. retrieve todo items
-3. extract planning intents
-4. generate deterministic schedule
-5. validate on hard constraints
-6. return normalized plan
+## System Architecture
+The system uses a hybrid agent architecture. The LLM is responsible for semantic reasoning and intent extraction, while deterministic backend handles scheduling, validation, normalization, tracing, and evaluation.  
 
+```text
+Client / CLI / FastAPI Request
+        ↓
+run_agent()
+        ↓
+LLM Tool-Calling Loop
+        ↓
+Planning Intent JSON
+        ↓
+Intent Cleanup
+        ↓
+Context Completion
+        ↓
+Deterministic Scheduler
+        ↓
+Validation Layer
+        ↓
+Normalization
+        ↓
+Runtime Trace + Final Plan
+```
 
 ## Key Features
 ### Multi-step Single Agent Loop
-The agent supports iterative reasoning and tool execution within a fixed max loop count, and a fallback return message when reaching max limit.
+The agent follows a multi-step tool-calling loop to gather context and generate planning intents.
 
 ```text
-User Input
+User Query
     ↓
-LLM Reasoning
+LLM Tool Calling
     ↓
-Backend Tool Execution
+Tool Results
     ↓
-Tool Result Injection
-    ↓
-LLM Continues Reasoning
-    ↓
-Planning Intent Extraction
-    ↓
-Backend Deterministic Scheduling
-    ↓
-Backend Validation
-    ↓
-Final Structured Plan
-```
-
-The system maintains full conversation state through `messages` list:  
-```text
-system prompt
-user request
-assistant tool-call decisions
-tool execution results
-assistant reasoning
-tool execution results
-...
-final response
-```
-
-### Tool Registry
-Backend tools are dynamically dispatched through a tool registry:  
-```python
-TOOL_MAP = {
-    "get_calendar_events": get_calendar_events,
-    "get_todo_items": get_todo_items,
-    "get_weather: get_weather
-}
+Planning Intent Generation
 ```
 
 ### Deterministic Scheduler
-The backend scheduler converts high level planning intents into concrete schedules.
+The backend scheduler converts high level planning intents into concrete schedules while enforcing deterministic constraints.
 
-Current scheduling features:  
-- earliest free slot allocation
+#### Current capabilities:
 - calendar-aware scheduling
-- skipped task handling
+- priority-based task placement
 - preferred time windows
-- priority task handling
 - `not_before` constraint
 - duration overrides
-- unscheduled task handling
+- skipped and unscheduled task handling
 
-Example Scheduling Logic:  
+#### Example Scheduling Logic:  
 ```text
 planning intents
     ↓
@@ -102,36 +82,33 @@ free interval generation
 priority sorting
     ↓
 deterministic slot allocation
-    • preferred time window
-    • not_before
-    • duration fitting
     ↓
 structured final plan
 ```
 
 ### Deterministic Validation  
-A deterministic validation layer verifies that generated schedules satisfy hard constraints.  
+A deterministic validation layer verifies that generated schedules satisfy hard constraints before returning results. 
 
-Current validations include:  
+#### Current validations include:  
 - valid time intervals
 - overlap detection
 - calendar conflict detection
 - duration correctness
 - `not_before`constraint validation
-- todo items coverage validation
+- todo coverage validation
+
+The validator acts as a guardrail between schedule generation and final output.
 
 ### Normalization
-A normalization layer translates the validated raw plan into a structured plan. Without normalization, the raw plan can be:  
-- unsorted
-- without task title
+A normalization layer converts the validated raw plan into a structured and user-friendly plan.  
 
-Normalization layer sorts the intervals by chronological order, generates the structured planning summary, status, and structured plan.  
+This layer generates a consistent response format, planning summary, and chronologically ordered schedule.
 
-### Observability
-The agent generates strucutred runtime traces for every execution.  
+### Runtime Trace
+The agent generates structured runtime traces for every execution.  
 
-Each trace record:  
-- user input
+Each trace captures:  
+- user query
 - execution status
 - planning intents
 - scheduled tasks
@@ -139,104 +116,72 @@ Each trace record:
 - skipped tasks
 - validation results
 
-These traces facilate debugging, failure anlaysis, and evaluation pipeline.
+Runtime traces serve as the foundation for debugging, validation, and offline evaluation.
 
-### Evaluation Analysis
-The project includes an end-to-end evaluation pipeline based on golden test cases.  
+### Evaluation Pipeline
+The project includes an end-to-end evaluation pipeline built on golden test cases.  
 
 Components:
-- `gold_data.jsonl`
-- `e2e_eval_runner.py`
+- golden dataset `gold_data.jsonl`
 - runtime trace collection
-- Expect vs Actual comparison
-- Failure categorization
+- expected vs actual comparison
+- failure categorization
 - summary report generation
 
-#### Failure Categories
-- duration failures:
-    - DURATION_VALUE_MISMATCH
-    - MISSING_EXPECTED_OVERRIDE_DURATION
-    - DURATION_HALLUCINATION
-- not_before failures:
-    - NOT_BEFORE_VALUE_MISMATCH
-    - NOT_BEFORE_MISSING
-    - NOT_BEFORE_HALLUCINATION
-- calendar conflict:
-    - CONFLICT_WITH_CALENDAR
-- scheduling failures:
-    - SCHEDULED_TASK_SET_MISMATCH
-    - UNSCHEDULED_TASK_SET_MISMATCH
-    - SKIPPED_TASK_SET_MISMATCH
-- intent coverage failure:
-    - INTENT_COVERAGE_MISSING
-- dependency order failure:
-    - DEPENDENCY_ORDER_INCORRECT
+The evaluation framework validates both agent behavior and scheduler correctness, enabling systematic failure analysis and iterative improvement.
 
-#### Evaluation Result
-```jsonl
-{
-  "total": 26,
-  "passed": 14,
-  "failed": 8,
-  "supported_case": 22,
-  "unsupported_case": 4,
-  "supported_pass_rate": 63.64,
-  "NOT_BEFORE_HALLUCINATION": 6,
-  "UNSUPPORTED_CASE": 4,
-  "NOT_BEFORE_VALUE_MISMATCH": 1,
-  "SCHEDULED_TASK_SET_MISMATCH": 1,
-  "INTENT_COVERAGE_MISSING": 1,
-  "STATUS_MISMATCH": 1
-}
-```
-Above summary report shows that the most dominant failure mode comes from **LLM over-inferring hard time constraints (not_before)**. Scheduler and validation components are generally stable.  
+## Key Engineering Insights
+### not_before Constraint Hallucination
 
-#### Not-before Hallucination Summary
-This dominant failure mode surfaced that **the planner frequently inferred temporal constraints from calendar events, task semantics, or scheduling heuristics rather than explicit user instructions**. In many cases, relative ordering constraints (e.g., "first", "then", "last") were incorrectly converted into absolute time constraints.  
+Evaluation revealed that the dominant failure mode was `not_before` hallucination.
 
-This indicates a planner-scheduler boundary violation, where the planner performs implicit scheduling decisions instead of purely extracting user intent.  
+The planner frequently inferred temporal constraints that were never explicitly requested by users. In many cases, relative ordering instructions such as "first", "then", or "after that" were incorrectly converted into absolute time constraints.
 
-#### Not_before Hallucination Hotfix
-We did a few round of system prompt update, however, it is not efficient enough to resolve the over-infer issue for not_before.  
+This exposed a **planner-scheduler boundary violation**, where the planner implicitly performed scheduling decisions instead of purely extracting user intent.  
 
-Therefore, instead of attempting to adjust the systemm prompt in a few more rounds, we added an `intent cleanup layer` to remove hallucinated not_before constraints. In MVP scope, we adopted a rule-based deterministic logic instead of adopting LLM based judge.  
+### Mitigation
+Prompt-based mitigation alone was insufficient to reliably prevent `not_before` hallucination.
 
-We reran the eval runner, and generated the new summary report.  
-```json
-{
-  "total": 26,
-  "passed": 19,
-  "failed": 3,
-  "supported_case": 22,
-  "unsupported_case": 4,
-  "supported_pass_rate": 86.36,
-  "UNSUPPORTED_CASE": 4,
-  "NOT_BEFORE_VALUE_MISMATCH": 1,
-  "NOT_BEFORE_HALLUCINATION": 1,
-  "SCHEDULED_TASK_SET_MISMATCH": 1,
-  "SKIPPED_TASK_SET_MISMATCH": 1
-}
-```
-The above summary showed the dramastic drop for `not_before_hallucination` from previous 7 cases to only 1. And majorly improved the overall supported pass rate from 63.64% to 86.36%.
+For MVP scope, a deterministic query-level cleanup layer was introduced before scheduling. If a user query contains no explicit temporal anchor, all generated `not_before` constraints are removed before scheduling.
+
+This conservative approach significantly reduced hallucinated constraints without introducing an additional LLM-based judge.
+
+### Result
+On the current evaluation dataset, the mitigation reduced `not_before` hallucination from 6 cases to 1 case and improved supported pass rate from 63.64% to 86.36%.
+
+---
+
+### LLM Reliability Requires Backend Guardrails
+During development, several reliability issues surfaced:  
+- structured output constraints were not always respected
+- required context was not always retrieved
+- repair loops did not consistently converge
+
+Instead of relying solely on prompt engineering, deterministic backend guardrails were introduced, including:
+- context completion
+- validation
+- normalization
+- query-level constraint cleanup
+
+This shifted critical correctness guarantees from the LLM to backend systems, resulting in a more reliable and debuggable architecture.
 
 
 ## Architecture Evolution: LLM-heavy Planning vs Hybrid Systems
-
 ### Iteration 1: LLM-heavy Planning
 
 LLM generates:
-- todo_id
-- start
-- end
+- task todo_id
+- task start time
+- task end time
 
 Problems:
-- unstable repair loop
-- poor converges
+- repair loops did not consistently converge
+- scheduling constraints were difficult to enforce reliably
 
 ---
 ### Iteration 2: Hybrid Architecture
 
-The current hybrid architecture moves deterministic logic into the backend. And removed the LLM based repair loop.  
+The hybrid architecture moves deterministic planning logic into backend systems and removes the LLM from direct schedule generation. 
 
 LLM responsibilities:
 - understand user intent
@@ -245,81 +190,64 @@ LLM responsibilities:
 - generate high-level planning intent
 
 Backend responsibilities:
-- deterministic duration calculation
+- intent cleanup
+- context completion
+- deterministic scheduling
 - interval allocation
 - overlap prevention
-- conflict resolution
+- constraint validation
 - final schedule generation
 
-This transition reflects a common industrial pattern in modern AI agent systems:
+This transition reflects a common industrial pattern in production AI systems:
 
-> LLM + deterministic backend systems
+> LLMs handle reasoning. Backend systems enforce correctness.
 
 
-## Core Engineering Challenges
-### 1. LLMs Are Weak at Deterministic Scheduling
-Initial iterations allowed the LLM to generate fully concrete schedules directly.  
+## FastAPI Service
+This project exposes the Lifestyle Planner Agent as a local FastAPI service for programmatic access and integration.
 
-This led to common failures:  
-- invalid time calculation
-- incorrect task duration calculation
-- overlap reintroduction
-- unstable repair behavior
+The API exposes a single planning endpoint that returns both the final plan and runtime trace.
 
-Example issues:  
-- fixing one introduces another
-- repeated over or less scheduling
-- local repairs breaks global consistency
+#### Run Locally
+```bash
+pip install -r requirements.txt
+python -m uvicorn app:app --reload
+```
 
-Key engineering insight:
-> LLMs are strong at semantic reasoning, but weak at deterministic constraint satisfaction.
-
----
-### 2. Repair Loop Do Not Converge
-Ealier iterations experimented with LLM repair loops:
+#### Swagger UI:
 ```text
-invalid plan
-    ↓
-validation errors
-    ↓
-LLM repair
-    ↓
-re-validation
-    ...
+http://127.0.0.1:8000/docs
 ```
-However, repair loops failed to converge. At the same time, repair loops are costy, unreliable and introducing bigger latency.  
 
-This motivates the transition towards backend deterministic scheduling by reducing LLM's responsibility.
-
----
-
-### 3. LLM Output Contract Violations
-The system also exposed common agent reliability problems:  
-- invalid JSON output
-- inconsistent schemas and type
-- missing todo coverage
-
-These issues motivated:
-
-- stronger prompting
-- validation pipelines
-- normalization layers
-- stricter backend contracts
-
-### 4. Latency Issue
-latency issue is hard to ignored in current project MVP. Single query takes more than a few seconds to provide a final result. The main issue is about sequentially calling all the availble tools. In this iteration, `get_calender_events` and `get_todo_items` can be called in parallel since they are not dependent on each other. Next iteration will call these tools in parallel to reduce the overall latency.
-
-
-## Future improvement:
-- parallel tool calling
-- FastAPI service wrapper
-
-
-
-## Run the project
+#### Service Flow
+```text
+Client Request
+    ↓
+FastAPI Endpoint
+    ↓
+run_agent()
+    ↓
+LLM Planning Intent Extraction
+    ↓
+Intent Cleanup
+    ↓
+Context Completion
+    ↓
+Deterministic Scheduler
+    ↓
+Validation Layer
+    ↓
+Normalization
+    ↓
+Runtime Trace + JSON Response
 ```
-python main.py
 
-example user query:
-help me plan tomorrow's schedule
-```
+#### Notes:
+The FastAPI layer is intentionally thin. Core planning logic remains inside run_agent(), while the API layer handles request parsing, response formatting, and exposing the agent as a local backend service.
+
+## Future improvements:
+- parallel tool calling to reduce overall latency
+- Task-level grounding validation for temporal constraints
+- Support for task splitting across multiple free intervals
+- Additional scheduling constraints such as `not_after`
+- Cloud deployment beyond local FastAPI service
